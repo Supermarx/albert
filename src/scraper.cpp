@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <stack>
+#include <fstream>
 
 #include "parsers/category_listing_parser.hpp"
 
@@ -23,6 +24,7 @@ namespace supermarx
 		std::stack<std::string> stack;
 		stack.emplace("http://www.ah.nl/appie/producten");
 
+		size_t i = 0;
 		while(!stack.empty())
 		{
 			const std::string url = stack.top();
@@ -32,11 +34,13 @@ namespace supermarx
 				[&](const category_listing_parser::category_crumb_t& crumb)
 				{
 					stack.emplace(url + "/" + crumb);
-				}
+				},
+				callback
 			);
 
 			std::cout << url << std::endl;
 			cat_parser.parse(dl.fetch(url));
+			i++;
 		}
 	}
 }

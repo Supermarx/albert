@@ -26,7 +26,8 @@ find_package(Boost COMPONENTS system program_options regex REQUIRED)
 include_directories(SYSTEM
                     ${CURL_INCLUDE_DIRS}
                     ${arabica_INCLUDE_DIRS}
-                    ${Boost_INCLUDE_DIRS})
+                    ${Boost_INCLUDE_DIRS}
+                    ${SuperMarx_INCLUDE_DIRS})
                     
 target_link_libraries(albert
                       ${CURL_LIBRARIES}

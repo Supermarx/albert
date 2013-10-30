@@ -2,15 +2,17 @@
 
 #include <functional>
 
+#include <supermarx/product.hpp>
+
 #include "util/downloader.hpp"
-#include "product.hpp"
+
 
 namespace supermarx
 {
 	class scraper
 	{
 	public:
-		using callback_t = std::function<void(const product&)>;
+		using callback_t = std::function<void(const Product&)>;
 
 	private:
 		callback_t callback;

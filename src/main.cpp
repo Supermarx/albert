@@ -5,14 +5,14 @@
 
 int main()
 {
-	std::vector<supermarx::product> products;
-	supermarx::scraper s([&](const supermarx::product& product) {
+	std::vector<supermarx::Product> products;
+	supermarx::scraper s([&](const supermarx::Product& product) {
 		products.push_back(product);
 	});
 
 	s.scrape();
 
-	for(supermarx::product& product : products){
+	for(supermarx::Product& product : products){
 		std::cout << "FANTASTISCHE " << product.name << " voor maar " << product.price_in_cents/100.0f << std::endl;
 	}
 }

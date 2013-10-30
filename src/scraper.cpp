@@ -11,10 +11,10 @@ namespace supermarx
 
 	void scraper::scrape()
 	{
-		product appleflap{"Appleflaps", 2000};
+		Product appleflap{"Appleflaps", 2000};
 		callback(appleflap);
 
-		product mudcrab{"Mudcrab Sticks", 1337};
+		Product mudcrab{"Mudcrab Sticks", 1337};
 		callback(mudcrab);
 
 		std::cout << dl.fetch("http://www.ah.nl/appie/producten") << std::endl;

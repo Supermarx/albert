@@ -6,12 +6,12 @@
 #include <boost/regex.hpp>
 #include <boost/optional.hpp>
 
+#include <supermarx/product.hpp>
+
 #include "../util/html_parser.hpp"
 #include "../util/html_watcher.hpp"
 #include "../util/html_recorder.hpp"
 #include "../util/util.hpp"
-
-#include "../product.hpp"
 
 namespace supermarx
 {
@@ -20,7 +20,7 @@ namespace supermarx
 	public:
 		typedef std::string category_crumb_t;
 		typedef std::function<void(category_crumb_t)> category_callback_t;
-		typedef std::function<void(product)> product_callback_t;
+		typedef std::function<void(supermarx::Product)> product_callback_t;
 
 	private:
 		enum state_e {
@@ -106,7 +106,7 @@ namespace supermarx
 					wc.add([&]() {
 						state = S_INIT;
 
-						product_callback(product{
+						product_callback(supermarx::Product{
 							current_p.name,
 							parse_price(current_p.price)
 						});

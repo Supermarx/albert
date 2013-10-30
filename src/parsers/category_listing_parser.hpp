@@ -30,13 +30,14 @@ namespace supermarx
 
 		virtual void startElement(const std::string& /* namespaceURI */, const std::string& /* localName */, const std::string& qName, const AttributesT& atts)
 		{
-			static const boost::regex has_category_class("category");
+			static const boost::regex has_canvas_card_class("\\bcanvas_card\\b");
+			static const boost::regex has_category_class("\\bcategory\\b");
 			static const boost::regex match_url_breadcrumb(".*/([^/]*)");
 
 			if(qName != "a")
 				return;
 
-			if(boost::regex_search(atts.getValue("class"), has_category_class))
+			if(boost::regex_search(atts.getValue("class"), has_category_class) && boost::regex_search(atts.getValue("class"), has_canvas_card_class))
 			{
 				boost::smatch what;
 				if(boost::regex_match(atts.getValue("href"), what, match_url_breadcrumb))

@@ -6,8 +6,8 @@ include_directories("${PROJECT_BINARY_DIR}")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/modules")
 
-file(GLOB_RECURSE albert_HEADERS *.hpp)
-file(GLOB_RECURSE albert_SOURCES *.cpp)
+file(GLOB_RECURSE albert_HEADERS src/*.hpp)
+file(GLOB_RECURSE albert_SOURCES src/*.cpp)
 
 add_executable(albert
 	${albert_SOURCES}

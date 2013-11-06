@@ -21,7 +21,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
 
 find_package(CURL REQUIRED)
 find_package(arabica REQUIRED)
-find_package(Boost COMPONENTS system program_options regex REQUIRED)
+find_package(Boost COMPONENTS system program_options regex locale REQUIRED)
 
 include_directories(SYSTEM
                     ${CURL_INCLUDE_DIRS}

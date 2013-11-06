@@ -3,6 +3,7 @@
 #include <iostream>
 #include <stack>
 #include <fstream>
+#include <boost/locale.hpp>
 
 #include "parsers/category_listing_parser.hpp"
 
@@ -15,12 +16,6 @@ namespace supermarx
 
 	void scraper::scrape()
 	{
-		Product appleflap{"Appleflaps", 2000};
-		callback(appleflap);
-
-		Product mudcrab{"Mudcrab Sticks", 1337};
-		callback(mudcrab);
-
 		struct stack_e
 		{
 			std::string url;
@@ -48,7 +43,6 @@ namespace supermarx
 				},
 				[&](int offset)
 				{
-				std::cout << offset << std::endl;
 					stack.emplace(top.url, offset);
 				},
 				callback
@@ -56,7 +50,9 @@ namespace supermarx
 
 			const std::string url = top.url+"?offset="+boost::lexical_cast<std::string>(top.offset);
 			std::cout << url << std::endl;
-			cat_parser.parse(dl.fetch(url));
+
+			//Albert Heijn uses iso88591 unfortunately
+			cat_parser.parse(boost::locale::conv::to_utf<char>(dl.fetch(url), "iso88591"));
 			i++;
 		}
 	}

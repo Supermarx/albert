@@ -21,6 +21,7 @@ namespace supermarx
 		typedef std::string category_crumb_t;
 		typedef std::function<void(category_crumb_t)> category_callback_t;
 		typedef std::function<void(supermarx::Product)> product_callback_t;
+		typedef std::function<void(int)> more_callback_t;
 
 	private:
 		enum state_e {
@@ -35,6 +36,7 @@ namespace supermarx
 		};
 
 		category_callback_t category_callback;
+		more_callback_t more_callback;
 		product_callback_t product_callback;
 
 		boost::optional<html_recorder> rec;
@@ -55,8 +57,9 @@ namespace supermarx
 		}
 
 	public:
-		category_listing_parser(category_callback_t category_callback_, product_callback_t product_callback_)
+		category_listing_parser(category_callback_t category_callback_, more_callback_t more_callback_, product_callback_t product_callback_)
 		: category_callback(category_callback_)
+		, more_callback(more_callback_)
 		, product_callback(product_callback_)
 		, rec()
 		, wc()
@@ -75,11 +78,13 @@ namespace supermarx
 			static const boost::regex has_canvas_card_class("\\bcanvas_card\\b");
 			static const boost::regex has_category_class("\\bcategory\\b");
 			static const boost::regex has_product_class("\\bproduct\\b");
+			static const boost::regex has_appender_class("\\bappender\\b");
 
 			static const boost::regex has_detail_class("\\bdetail\\b");
 			static const boost::regex has_price_class("\\bprice\\b");
 
-			static const boost::regex match_url_breadcrumb(".*/([^/]*)");
+			static const boost::regex match_url_breadcrumb(".*/([^/?]*)\\?offset=[0-9]+");
+			static const boost::regex match_url_offset(".*offset=([0-9]+)");
 
 			if(rec)
 				rec.get().startElement();
@@ -111,6 +116,12 @@ namespace supermarx
 							parse_price(current_p.price)
 						});
 					});
+				}
+				else if(boost::regex_search(att_class, has_appender_class))
+				{
+					boost::smatch what;
+					if(boost::regex_match(atts.getValue("href"), what, match_url_offset))
+						more_callback(boost::lexical_cast<int>(what[1]));
 				}
 			break;
 			case S_PRODUCT:

@@ -2,6 +2,7 @@
 
 #include <string>
 #include <boost/algorithm/string.hpp>
+#include <boost/regex.hpp>
 
 namespace supermarx
 {
@@ -30,6 +31,23 @@ namespace supermarx
 			
 			boost::trim(result);
 			return result;
+		}
+
+		static inline bool contains_attr(const std::string& needle, const std::string& haystack)
+		{
+			static const boost::regex regex_classes(" ");
+
+			boost::sregex_token_iterator it(haystack.begin(), haystack.end(), regex_classes, -1);
+			boost::sregex_token_iterator end;
+
+			while(it != end)
+			{
+				auto m = *it++;
+				if(m.matched && m.compare(needle) == 0)
+					return true;
+			}
+
+			return false;
 		}
 	};
 }

@@ -1,11 +1,13 @@
 #include "scraper.hpp"
 
 #include <iostream>
-#include <stack>
+#include <deque>
 #include <fstream>
 #include <boost/locale.hpp>
 
-#include "parsers/category_listing_parser.hpp"
+#include "parsers/category_parser.hpp"
+#include "parsers/subcategory_parser.hpp"
+#include "parsers/product_parser.hpp"
 
 namespace supermarx
 {
@@ -16,44 +18,41 @@ namespace supermarx
 
 	void scraper::scrape()
 	{
-		struct stack_e
+		static const std::string domain_uri = "http://www.ah.nl";
+		std::deque<std::string> todo;
+
+		category_parser c_p(
+			[&](const category_parser::category_uri_t c)
 		{
-			std::string url;
-			int offset;
+			subcategory_parser sc_p(
+				[&](const subcategory_parser::subcategory_uri_t sc)
+			{
+				std::cout << sc << std::endl;
+				todo.push_back(sc);
+			});
 
-			stack_e(std::string url_, int offset_)
-			: url(url_)
-			, offset(offset_)
-			{}
-		};
+			std::cout << c << std::endl;
 
-		std::stack<stack_e> stack;
-		stack.emplace("http://www.ah.nl/appie/producten", 0);
+			sc_p.parse(boost::locale::conv::to_utf<char>(dl.fetch(domain_uri + c), "iso88591"));
+		});
 
-		size_t i = 0;
-		while(!stack.empty())
+		c_p.parse(boost::locale::conv::to_utf<char>(dl.fetch(domain_uri + "/appie/producten"), "iso88591"));
+
+		while(!todo.empty())
 		{
-			const stack_e top = stack.top();
-			stack.pop();
+			std::string current_uri = todo.front();
+			todo.pop_front();
 
-			category_listing_parser cat_parser(
-				[&](const category_listing_parser::category_crumb_t& crumb)
-				{
-					stack.emplace(top.url + "/" + crumb, 0);
-				},
-				[&](int offset)
-				{
-					stack.emplace(top.url, offset);
-				},
-				callback
-			);
+			std::cout << current_uri << std::endl;
 
-			const std::string url = top.url+"?offset="+boost::lexical_cast<std::string>(top.offset);
-			std::cout << url << std::endl;
+			product_parser p_p(
+			[&](const std::string uri)
+			{
+				todo.push_front(uri);
+			},
+			callback);
 
-			//Albert Heijn uses iso88591 unfortunately
-			cat_parser.parse(boost::locale::conv::to_utf<char>(dl.fetch(url), "iso88591"));
-			i++;
+			p_p.parse(boost::locale::conv::to_utf<char>(dl.fetch(domain_uri + current_uri), "iso88591"));
 		}
 	}
 }

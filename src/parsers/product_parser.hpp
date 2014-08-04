@@ -15,13 +15,11 @@
 
 namespace supermarx
 {
-	class category_listing_parser : public html_parser::default_handler
+	class product_parser : public html_parser::default_handler
 	{
 	public:
-		typedef std::string category_crumb_t;
-		typedef std::function<void(category_crumb_t)> category_callback_t;
 		typedef std::function<void(supermarx::Product)> product_callback_t;
-		typedef std::function<void(int)> more_callback_t;
+		typedef std::function<void(std::string)> more_callback_t;
 
 	private:
 		enum state_e {
@@ -35,7 +33,6 @@ namespace supermarx
 			std::string name, price, old_price;
 		};
 
-		category_callback_t category_callback;
 		more_callback_t more_callback;
 		product_callback_t product_callback;
 
@@ -57,9 +54,8 @@ namespace supermarx
 		}
 
 	public:
-		category_listing_parser(category_callback_t category_callback_, more_callback_t more_callback_, product_callback_t product_callback_)
-		: category_callback(category_callback_)
-		, more_callback(more_callback_)
+		product_parser(more_callback_t more_callback_, product_callback_t product_callback_)
+		: more_callback(more_callback_)
 		, product_callback(product_callback_)
 		, rec()
 		, wc()
@@ -75,15 +71,6 @@ namespace supermarx
 
 		virtual void startElement(const std::string& /* namespaceURI */, const std::string& /* localName */, const std::string& qName, const AttributesT& atts)
 		{
-			static const boost::regex has_canvas_card_class("\\bcanvas_card\\b");
-			static const boost::regex has_category_class("\\bcategory\\b");
-			static const boost::regex has_product_class("\\bproduct\\b");
-			static const boost::regex has_appender_class("\\bappender\\b");
-
-			static const boost::regex has_detail_class("\\bdetail\\b");
-			static const boost::regex has_price_class("\\bprice\\b");
-
-			static const boost::regex match_url_breadcrumb(".*/([^/?]*)\\?offset=[0-9]+");
 			static const boost::regex match_url_offset(".*offset=([0-9]+)");
 
 			if(rec)
@@ -96,13 +83,7 @@ namespace supermarx
 			switch(state)
 			{
 			case S_INIT:
-				if(boost::regex_search(att_class, has_category_class) && boost::regex_search(att_class, has_canvas_card_class))
-				{
-					boost::smatch what;
-					if(boost::regex_match(atts.getValue("href"), what, match_url_breadcrumb))
-						category_callback(what[1]);
-				}
-				else if(boost::regex_search(att_class, has_product_class) && boost::regex_search(att_class, has_canvas_card_class))
+				if(atts.getValue("data-appie") == "productpreview")
 				{
 					//Reset product
 					current_p = product_proto();
@@ -117,17 +98,17 @@ namespace supermarx
 						});
 					});
 				}
-				else if(boost::regex_search(att_class, has_appender_class))
+				else if(util::contains_attr("appender", att_class))
 				{
 					boost::smatch what;
 					if(boost::regex_match(atts.getValue("href"), what, match_url_offset))
-						more_callback(boost::lexical_cast<int>(what[1]));
+						more_callback(what[0]);
 				}
 			break;
 			case S_PRODUCT:
-				if(boost::regex_search(att_class, has_detail_class))
+				if(util::contains_attr("detail", att_class))
 					rec = html_recorder([&](std::string ch) { current_p.name = util::sanitize(ch); });
-				else if(boost::regex_search(att_class, has_price_class))
+				else if(util::contains_attr("price", att_class))
 				{
 					state = S_PRODUCT_PRICE;
 					wc.add([&]() { state = S_PRODUCT; });

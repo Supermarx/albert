@@ -52,7 +52,7 @@ namespace supermarx
 			switch(state)
 			{
 			case S_INIT:
-				if(atts.getValue("data-appie") == "categoryscroll")
+				if(atts.getValue("data-class") == "category-navigation-items")
 				{
 					state = S_CATEGORIES;
 

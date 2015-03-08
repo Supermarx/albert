@@ -36,7 +36,7 @@ namespace supermarx
 			sc_p.parse(boost::locale::conv::to_utf<char>(dl.fetch(domain_uri + c), "iso88591"));
 		});
 
-		c_p.parse(boost::locale::conv::to_utf<char>(dl.fetch(domain_uri + "/appie/producten"), "iso88591"));
+		c_p.parse(boost::locale::conv::to_utf<char>(dl.fetch(domain_uri + "/producten"), "iso88591"));
 
 		while(!todo.empty())
 		{

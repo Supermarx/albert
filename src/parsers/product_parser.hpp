@@ -18,7 +18,7 @@ namespace supermarx
 	class product_parser : public html_parser::default_handler
 	{
 	public:
-		typedef std::function<void(supermarx::Product)> product_callback_t;
+		typedef std::function<void(supermarx::product)> product_callback_t;
 		typedef std::function<void(std::string)> more_callback_t;
 
 	private:
@@ -92,7 +92,7 @@ namespace supermarx
 					wc.add([&]() {
 						state = S_INIT;
 
-						product_callback(supermarx::Product{
+						product_callback(supermarx::product{
 							current_p.name,
 							parse_price(current_p.price)
 						});

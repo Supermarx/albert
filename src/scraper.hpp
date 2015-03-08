@@ -12,7 +12,7 @@ namespace supermarx
 	class scraper
 	{
 	public:
-		using callback_t = std::function<void(const Product&)>;
+		using callback_t = std::function<void(const product&)>;
 
 	private:
 		callback_t callback;

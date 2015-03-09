@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <stdexcept>
+#include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/regex.hpp>
 #include <boost/optional.hpp>
@@ -25,12 +26,8 @@ namespace supermarx
 		enum state_e {
 			S_INIT,
 			S_PRODUCT,
+			S_PRODUCT_NAME,
 			S_PRODUCT_PRICE
-		};
-
-		struct product_proto
-		{
-			std::string name, price, old_price;
 		};
 
 		more_callback_t more_callback;
@@ -40,6 +37,15 @@ namespace supermarx
 		html_watcher_collection wc;
 
 		state_e state;
+
+		struct product_proto
+		{
+			std::string identifier, name;
+			boost::optional<unsigned int> del_price, ins_price;
+			boost::optional<std::string> shield, subtext;
+			boost::optional<date> valid_on;
+		};
+
 		product_proto current_p;
 
 		static unsigned int parse_price(const std::string& str)
@@ -50,7 +56,138 @@ namespace supermarx
 			if(!boost::regex_match(str, what, match_price))
 				throw std::runtime_error("Could not parse price " + str);
 
-			return boost::lexical_cast<unsigned int>(what[1])*100 + boost::lexical_cast<unsigned int>(what[2]);
+			return boost::lexical_cast<float>(what[1])*100 + boost::lexical_cast<unsigned int>(what[2]);
+		}
+
+		void deliver_product()
+		{
+			if(current_p.subtext)
+			{
+				std::string subtext = current_p.subtext.get();
+
+				static const boost::regex match_deadline("t/m [0-9]+ [a-z]{3}");
+				boost::smatch what;
+
+				if(
+					subtext == "dit product wordt ah biologisch" ||
+					subtext == "bestel 2 dagen van tevoren" ||
+					subtext == "nieuw in het assortiment" ||
+					subtext == "belgisch assortiment in nl" ||
+					subtext == "alleen online" ||
+					subtext == "online aanbieding" ||
+					boost::regex_match(subtext, what, match_deadline)
+				)
+				{
+					/* No relevant data for us, ignore */
+				}
+				else if(
+					subtext == "binnenkort verkrijgbaar"
+				)
+				{
+					return; /* Product not yet available */
+				}
+				else
+				{
+					std::cerr << '[' << current_p.identifier << "] " << current_p.name << std::endl;
+					std::cerr << "subtext: \'" << current_p.subtext.get() << '\'' << std::endl;
+				}
+			}
+
+			unsigned int orig_price, price;
+			condition discount_condition = condition::ALWAYS;
+
+			orig_price = current_p.del_price ? current_p.del_price.get() : current_p.ins_price.get();
+			price = current_p.ins_price.get();
+
+			if(current_p.shield)
+			{
+				std::string shield = current_p.shield.get();
+
+				static const boost::regex match_percent_discount("([0-9]+)% korting");
+				static const boost::regex match_euro_discount("([0-9]+) euro korting");
+				static const boost::regex match_eurocent_discount("([0-9]+\\.[0-9]+) euro korting");
+
+				static const boost::regex match_combination_discount("([0-9]+) voor (&euro; )?([0-9]+\\.[0-9]+)");
+				boost::smatch what;
+
+				if(
+					shield == "bonus" ||
+					shield == "actie"
+				)
+				{
+					/* Already covered by ins/del, do nothing */
+					if(!current_p.del_price)
+					{
+						std::stringstream sstr;
+						sstr << "Del should be set for " << '[' << current_p.identifier << "] " << current_p.name;
+						// Albert Heijn does this sometimes, "BONUS" without being clear what the real bonus is.
+						//throw std::runtime_error(sstr.str());
+						std::cerr << sstr.str() << std::endl;
+					}
+				}
+				else if(boost::regex_match(shield, what, match_euro_discount))
+				{
+					if(!current_p.del_price)
+						price -= boost::lexical_cast<unsigned int>(what[1])*100;
+				}
+				else if(boost::regex_match(shield, what, match_eurocent_discount))
+				{
+					if(!current_p.del_price)
+						price -= boost::lexical_cast<float>(what[1])*100;
+				}
+				else if(boost::regex_match(shield, what, match_percent_discount))
+				{
+					if(!current_p.del_price)
+						price *= 1.0 - boost::lexical_cast<float>(what[1])/100.0;
+				}
+				else if(shield == "2e halve prijs")
+				{
+					price *= 0.75;
+					discount_condition = condition::AT_TWO;
+				}
+				else if(
+					shield == "2=1" ||
+					shield == "1 + 1 gratis"
+				)
+				{
+					price *= 0.5;
+					discount_condition = condition::AT_TWO;
+				}
+				else if(shield == "2 + 1 gratis")
+				{
+					price *= 0.67;
+					discount_condition = condition::AT_THREE;
+				}
+				else if(boost::regex_match(shield, what, match_combination_discount))
+				{
+					unsigned int discount_amount = boost::lexical_cast<unsigned int>(what[1]);
+					unsigned int discount_combination_price = boost::lexical_cast<float>(what[3])*100;
+
+					if(discount_amount == 2)
+						discount_condition = condition::AT_TWO;
+					else if(discount_amount == 3)
+						discount_condition = condition::AT_THREE;
+					else
+						throw std::runtime_error(std::string("Previously unseen discount_amount ") + std::to_string(discount_amount));
+
+					price = discount_combination_price / discount_amount;
+				}
+				else
+				{
+					std::cerr << '[' << current_p.identifier << "] " << current_p.name << std::endl;
+					std::cerr << "shield: \'" << current_p.shield.get() << '\'' << std::endl;
+				}
+			}
+
+			product_callback(product{
+				 current_p.identifier,
+				 current_p.name,
+				 orig_price,
+				 price,
+				 discount_condition,
+				 current_p.valid_on ? current_p.valid_on.get() : datetime_now().date(),
+				 datetime_now()
+			 });
 		}
 
 	public:
@@ -92,10 +229,7 @@ namespace supermarx
 					wc.add([&]() {
 						state = S_INIT;
 
-						product_callback(supermarx::product{
-							current_p.name,
-							parse_price(current_p.price)
-						});
+						deliver_product();
 					});
 				}
 				else if(util::contains_attr("appender", att_class))
@@ -107,18 +241,43 @@ namespace supermarx
 			break;
 			case S_PRODUCT:
 				if(util::contains_attr("detail", att_class))
-					rec = html_recorder([&](std::string ch) { current_p.name = util::sanitize(ch); });
+				{
+					state = S_PRODUCT_NAME;
+					wc.add([&]() { state = S_PRODUCT; });
+				}
+				if(util::contains_attr("detail-addtolist", att_class))
+					current_p.identifier = atts.getValue("data-productid");
+				if(util::contains_attr("shield", att_class))
+					rec = html_recorder(
+						[&](std::string ch) {
+							std::string tmp = util::sanitize(ch);
+							boost::algorithm::to_lower(tmp);
+							if(tmp != "")
+								current_p.shield = tmp;
+						});
 				else if(util::contains_attr("price", att_class))
 				{
 					state = S_PRODUCT_PRICE;
 					wc.add([&]() { state = S_PRODUCT; });
 				}
 			break;
+			case S_PRODUCT_NAME:
+				if(qName == "h2")
+					rec = html_recorder([&](std::string ch) { current_p.name = util::sanitize(ch); });
+				else if(util::contains_attr("info", att_class))
+					rec = html_recorder(
+						[&](std::string ch) {
+							std::string tmp = util::sanitize(ch);
+							boost::algorithm::to_lower(tmp);
+							if(tmp != "")
+								current_p.subtext = tmp;
+						});
+			break;
 			case S_PRODUCT_PRICE:
 				if(qName == "del")
-					rec = html_recorder([&](std::string ch) { current_p.old_price = util::sanitize(ch); });
+					rec = html_recorder([&](std::string ch) { current_p.del_price = parse_price(util::sanitize(ch)); });
 				else if(qName == "ins")
-					rec = html_recorder([&](std::string ch) { current_p.price = util::sanitize(ch); });
+					rec = html_recorder([&](std::string ch) { current_p.ins_price = parse_price(util::sanitize(ch)); });
 			break;
 			}
 		}

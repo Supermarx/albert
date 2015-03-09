@@ -27,23 +27,18 @@ namespace supermarx
 			subcategory_parser sc_p(
 				[&](const subcategory_parser::subcategory_uri_t sc)
 			{
-				std::cout << sc << std::endl;
 				todo.push_back(sc);
 			});
 
-			std::cout << c << std::endl;
-
-			sc_p.parse(boost::locale::conv::to_utf<char>(dl.fetch(domain_uri + c), "iso88591"));
+			sc_p.parse(dl.fetch(domain_uri + c));
 		});
 
-		c_p.parse(boost::locale::conv::to_utf<char>(dl.fetch(domain_uri + "/producten"), "iso88591"));
+		c_p.parse(dl.fetch(domain_uri + "/producten"));
 
 		while(!todo.empty())
 		{
 			std::string current_uri = todo.front();
 			todo.pop_front();
-
-			std::cout << current_uri << std::endl;
 
 			product_parser p_p(
 			[&](const std::string uri)
@@ -52,7 +47,7 @@ namespace supermarx
 			},
 			callback);
 
-			p_p.parse(boost::locale::conv::to_utf<char>(dl.fetch(domain_uri + current_uri), "iso88591"));
+			p_p.parse(dl.fetch(domain_uri + current_uri));
 		}
 	}
 }

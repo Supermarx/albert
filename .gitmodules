@@ -1,0 +1,3 @@
+[submodule "contrib/wubwubcmake"]
+	path = contrib/wubwubcmake
+	url = git@github.com:NickNick/wubwubcmake

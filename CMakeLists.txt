@@ -1,35 +1,14 @@
 cmake_minimum_required(VERSION 2.8)
 
-project(albert)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake/wubwubcmake/modules")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake/modules")
+message(${CMAKE_MODULE_PATH})
 
-include_directories("${PROJECT_BINARY_DIR}")
+include("contrib/wubwubcmake/enable_cpp11.cmake")
+include("contrib/wubwubcmake/warning_settings.cmake")
+add_sane_warning_flags()
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/modules")
+list(APPEND Albert_INCLUDE_DIRS "${CMAKE_CURRENT_LIST_DIR}/src/")
+set(Albert_INCLUDE_DIRS ${Albert_INCLUDE_DIRS} PARENT_SCOPE)
 
-file(GLOB_RECURSE albert_HEADERS src/*.hpp)
-file(GLOB_RECURSE albert_SOURCES src/*.cpp)
-
-add_executable(albert
-	${albert_SOURCES}
-	${albert_HEADERS}
-)
-
-add_definitions("-Wall -Wextra -Weffc++ -std=c++0x -pedantic -g3 -O3")
-
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
-                      "${PROJECT_SOURCE_DIR}/cmake")
-
-find_package(CURL REQUIRED)
-find_package(arabica REQUIRED)
-find_package(Boost COMPONENTS system program_options regex locale REQUIRED)
-
-include_directories(SYSTEM
-                    ${CURL_INCLUDE_DIRS}
-                    ${arabica_INCLUDE_DIRS}
-                    ${Boost_INCLUDE_DIRS}
-                    ${SuperMarx_INCLUDE_DIRS})
-                    
-target_link_libraries(albert
-                      ${CURL_LIBRARIES}
-                      ${arabica_LIBRARIES}
-                      ${Boost_LIBRARIES})
+add_subdirectory("src/albert")

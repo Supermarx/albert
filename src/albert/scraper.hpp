@@ -3,9 +3,7 @@
 #include <functional>
 
 #include <supermarx/product.hpp>
-
-#include "util/downloader.hpp"
-
+#include <supermarx/util/downloader.hpp>
 
 namespace supermarx
 {

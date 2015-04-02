@@ -2,11 +2,10 @@ cmake_minimum_required(VERSION 2.8)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake/wubwubcmake/modules")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake/modules")
-message(${Karl_INCLUDE_DIRS})
 
 include("contrib/wubwubcmake/enable_cpp11.cmake")
 include("contrib/wubwubcmake/warning_settings.cmake")
-# add_sane_warning_flags()
+add_sane_warning_flags()
 
 add_subdirectory("src/albert")
 

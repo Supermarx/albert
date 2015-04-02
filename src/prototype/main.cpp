@@ -35,7 +35,7 @@ int main()
 
 		std::cout << std::endl;
 
-		karl.add_product(product);
+		karl.add_product(product, 1);
 	});
 
 	s.scrape();

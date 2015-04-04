@@ -55,7 +55,7 @@ int read_options(cli_options& opt, int argc, char** argv)
 	}
 
 	if(!vm.count("api"))
-		opt.api_host = "http://api.supermarx.nl";
+		opt.api_host = "https://api.supermarx.nl";
 
 	return EXIT_SUCCESS;
 }

@@ -97,6 +97,13 @@ namespace supermarx
 			condition discount_condition = condition::ALWAYS;
 
 			orig_price = current_p.del_price ? current_p.del_price.get() : current_p.ins_price.get();
+
+			if(!current_p.ins_price)
+			{
+				std::cerr << "product without a price, ignore" << std::endl;
+				return;
+			}
+
 			price = current_p.ins_price.get();
 
 			if(current_p.shield)

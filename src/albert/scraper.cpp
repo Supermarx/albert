@@ -13,7 +13,7 @@ namespace supermarx
 {
 	scraper::scraper(callback_t callback_)
 	: callback(callback_)
-	, dl("supermarx albert/1.0")
+	, dl("supermarx albert/1.0", 5000) // Rate limit of 5 seconds
 	{}
 
 	void scraper::scrape()

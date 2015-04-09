@@ -10,6 +10,7 @@
 struct cli_options
 {
 	std::string api_host;
+	unsigned int ratelimit;
 };
 
 int read_options(cli_options& opt, int argc, char** argv)
@@ -17,7 +18,8 @@ int read_options(cli_options& opt, int argc, char** argv)
 	boost::program_options::options_description o_general("General options");
 	o_general.add_options()
 			("help,h", "display this message")
-			("api,a", boost::program_options::value(&opt.api_host), "api host to send results to");
+			("api,a", boost::program_options::value(&opt.api_host), "api host to send results to")
+			("ratelimit,r", boost::program_options::value(&opt.ratelimit), "minimal time between each request in milliseconds (default: 5000)");
 
 	boost::program_options::variables_map vm;
 	boost::program_options::positional_options_description pos;
@@ -57,6 +59,9 @@ int read_options(cli_options& opt, int argc, char** argv)
 	if(!vm.count("api"))
 		opt.api_host = "https://api.supermarx.nl";
 
+	if(!vm.count("ratelimit"))
+		opt.ratelimit = 5000;
+
 	return EXIT_SUCCESS;
 }
 
@@ -92,7 +97,7 @@ int main(int argc, char** argv)
 
 		std::cout << std::endl;
 		api.add_product(product, 1);
-	});
+	}, opt.ratelimit);
 
 	s.scrape();
 

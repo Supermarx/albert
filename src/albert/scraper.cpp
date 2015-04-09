@@ -11,9 +11,9 @@
 
 namespace supermarx
 {
-	scraper::scraper(callback_t callback_)
-	: callback(callback_)
-	, dl("supermarx albert/1.0", 5000) // Rate limit of 5 seconds
+	scraper::scraper(callback_t _callback, unsigned int _ratelimit)
+	: callback(_callback)
+	, dl("supermarx albert/1.0", _ratelimit)
 	{}
 
 	void scraper::scrape()

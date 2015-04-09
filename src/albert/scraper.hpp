@@ -17,7 +17,7 @@ namespace supermarx
 		downloader dl;
 
 	public:
-		scraper(callback_t callback_);
+		scraper(callback_t _callback, unsigned int ratelimit = 5000);
 		scraper(scraper&) = delete;
 		void operator=(scraper&) = delete;
 

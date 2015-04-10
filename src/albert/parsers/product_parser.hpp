@@ -19,7 +19,7 @@ namespace supermarx
 	class product_parser : public html_parser::default_handler
 	{
 	public:
-		typedef std::function<void(supermarx::product)> product_callback_t;
+		typedef std::function<void(const product&, datetime, confidence)> product_callback_t;
 		typedef std::function<void(std::string)> more_callback_t;
 
 	private:
@@ -61,6 +61,8 @@ namespace supermarx
 
 		void deliver_product()
 		{
+			confidence conf = confidence::NEUTRAL;
+
 			if(current_p.subtext)
 			{
 				std::string subtext = current_p.subtext.get();
@@ -90,6 +92,7 @@ namespace supermarx
 				{
 					std::cerr << '[' << current_p.identifier << "] " << current_p.name << std::endl;
 					std::cerr << "subtext: \'" << current_p.subtext.get() << '\'' << std::endl;
+					conf = confidence::LOW;
 				}
 			}
 
@@ -183,6 +186,7 @@ namespace supermarx
 				{
 					std::cerr << '[' << current_p.identifier << "] " << current_p.name << std::endl;
 					std::cerr << "shield: \'" << current_p.shield.get() << '\'' << std::endl;
+					conf = confidence::LOW;
 				}
 			}
 
@@ -192,9 +196,8 @@ namespace supermarx
 				 orig_price,
 				 price,
 				 discount_condition,
-				 current_p.valid_on ? current_p.valid_on.get() : datetime_now().date(),
-				 datetime_now()
-			 });
+				 current_p.valid_on ? datetime(current_p.valid_on.get(), time()) : datetime_now(),
+			 }, datetime_now(), conf);
 		}
 
 	public:

@@ -24,30 +24,35 @@ namespace supermarx
 		category_parser c_p(
 			[&](const category_parser::category_uri_t c)
 		{
-			subcategory_parser sc_p(
-				[&](const subcategory_parser::subcategory_uri_t sc)
-			{
-				todo.push_back(sc);
-			});
-
-			sc_p.parse(dl.fetch(domain_uri + c));
+			todo.emplace_back(domain_uri + c);
 		});
 
 		c_p.parse(dl.fetch(domain_uri + "/producten"));
 
 		while(!todo.empty())
 		{
-			std::string current_uri = todo.front();
-			todo.pop_front();
+			subcategory_parser sc_p(
+				[&](const subcategory_parser::subcategory_uri_t sc)
+			{
+				todo.push_back(domain_uri + sc);
+			});
 
 			product_parser p_p(
 			[&](const std::string uri)
 			{
-				todo.push_front(uri);
+				todo.push_front(domain_uri + uri);
 			},
 			callback);
 
-			p_p.parse(dl.fetch(domain_uri + current_uri));
+			std::string current_uri = todo.front();
+			todo.pop_front();
+
+			std::cerr << current_uri << std::endl;
+
+			std::string src = dl.fetch(current_uri);
+
+			sc_p.parse(src);
+			p_p.parse(src);
 		}
 	}
 }

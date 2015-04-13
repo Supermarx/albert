@@ -9,10 +9,10 @@
 
 #include <supermarx/product.hpp>
 
-#include "../util/html_parser.hpp"
-#include "../util/html_watcher.hpp"
-#include "../util/html_recorder.hpp"
-#include "../util/util.hpp"
+#include <supermarx/scraper/html_parser.hpp>
+#include <supermarx/scraper/html_watcher.hpp>
+#include <supermarx/scraper/html_recorder.hpp>
+#include <supermarx/scraper/util.hpp>
 
 namespace supermarx
 {

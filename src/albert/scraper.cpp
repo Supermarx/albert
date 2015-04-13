@@ -1,13 +1,13 @@
-#include "scraper.hpp"
+#include <albert/scraper.hpp>
 
 #include <iostream>
 #include <deque>
 #include <fstream>
 #include <boost/locale.hpp>
 
-#include "parsers/category_parser.hpp"
-#include "parsers/subcategory_parser.hpp"
-#include "parsers/product_parser.hpp"
+#include <albert/parsers/category_parser.hpp>
+#include <albert/parsers/subcategory_parser.hpp>
+#include <albert/parsers/product_parser.hpp>
 
 namespace supermarx
 {

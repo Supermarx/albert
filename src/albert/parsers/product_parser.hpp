@@ -59,6 +59,14 @@ namespace supermarx
 			return boost::lexical_cast<float>(what[1])*100 + boost::lexical_cast<unsigned int>(what[2]);
 		}
 
+		static date first_monday(date d)
+		{
+			while(d.day_of_week() != weekday::Monday)
+				d += boost::gregorian::date_duration(1);
+
+			return d;
+		}
+
 		void deliver_product()
 		{
 			confidence conf = confidence::NEUTRAL;
@@ -87,6 +95,12 @@ namespace supermarx
 				)
 				{
 					return; /* Product not yet available */
+				}
+				else if(
+					subtext == "vanaf maandag"
+				)
+				{
+					current_p.valid_on = first_monday(datetime_now().date());
 				}
 				else
 				{

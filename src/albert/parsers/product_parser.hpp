@@ -110,8 +110,8 @@ namespace supermarx
 				}
 			}
 
-			unsigned int orig_price, price;
-			condition discount_condition = condition::ALWAYS;
+			uint64_t orig_price, price;
+			uint64_t discount_amount = 1;
 
 			orig_price = current_p.del_price ? current_p.del_price.get() : current_p.ins_price.get();
 
@@ -167,7 +167,7 @@ namespace supermarx
 				else if(shield == "2e halve prijs")
 				{
 					price *= 0.75;
-					discount_condition = condition::AT_TWO;
+					discount_amount = 2;
 				}
 				else if(
 					shield == "2=1" ||
@@ -175,24 +175,17 @@ namespace supermarx
 				)
 				{
 					price *= 0.5;
-					discount_condition = condition::AT_TWO;
+					discount_amount = 2;
 				}
 				else if(shield == "2 + 1 gratis")
 				{
 					price *= 0.67;
-					discount_condition = condition::AT_THREE;
+					discount_amount = 3;
 				}
 				else if(boost::regex_match(shield, what, match_combination_discount))
 				{
-					unsigned int discount_amount = boost::lexical_cast<unsigned int>(what[1]);
+					discount_amount = boost::lexical_cast<uint16_t>(what[1]);
 					unsigned int discount_combination_price = boost::lexical_cast<float>(what[3])*100;
-
-					if(discount_amount == 2)
-						discount_condition = condition::AT_TWO;
-					else if(discount_amount == 3)
-						discount_condition = condition::AT_THREE;
-					else
-						throw std::runtime_error(std::string("Previously unseen discount_amount ") + std::to_string(discount_amount));
 
 					price = discount_combination_price / discount_amount;
 				}
@@ -209,7 +202,7 @@ namespace supermarx
 				 current_p.name,
 				 orig_price,
 				 price,
-				 discount_condition,
+				 discount_amount,
 				 current_p.valid_on ? datetime(current_p.valid_on.get(), time()) : datetime_now(),
 			 }, datetime_now(), conf);
 		}

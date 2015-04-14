@@ -83,17 +83,8 @@ int main(int argc, char** argv)
 		else
 			std::cerr << product.orig_price/100.0f << " EUR -> " << product.price/100.0f << " EUR";
 
-		switch(product.discount_condition)
-		{
-		case supermarx::condition::ALWAYS:
-			break;
-		case supermarx::condition::AT_TWO:
-			std::cout << " (at two)";
-			break;
-		case supermarx::condition::AT_THREE:
-			std::cout << " (at three)";
-			break;
-		}
+		if(product.discount_amount > 1)
+			std::cerr << " (at " << product.discount_amount << ')';
 
 		std::cerr << std::endl;
 		api.add_product(product, 1, retrieved_on, c);

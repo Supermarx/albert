@@ -95,7 +95,7 @@ int main(int argc, char** argv)
 			break;
 		}
 
-		std::cout << std::endl;
+		std::cerr << std::endl;
 		api.add_product(product, 1, retrieved_on, c);
 	}, opt.ratelimit);
 

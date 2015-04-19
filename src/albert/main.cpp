@@ -10,6 +10,7 @@
 struct cli_options
 {
 	std::string api_host;
+	bool dry_run;
 	unsigned int ratelimit;
 };
 
@@ -19,6 +20,7 @@ int read_options(cli_options& opt, int argc, char** argv)
 	o_general.add_options()
 			("help,h", "display this message")
 			("api,a", boost::program_options::value(&opt.api_host), "api host to send results to")
+			("dry-run,d", "does not send products to api when set")
 			("ratelimit,r", boost::program_options::value(&opt.ratelimit), "minimal time between each request in milliseconds (default: 5000)");
 
 	boost::program_options::variables_map vm;
@@ -59,6 +61,8 @@ int read_options(cli_options& opt, int argc, char** argv)
 	if(!vm.count("api"))
 		opt.api_host = "https://api.supermarx.nl";
 
+	opt.dry_run = vm.count("dry-run");
+
 	if(!vm.count("ratelimit"))
 		opt.ratelimit = 5000;
 
@@ -87,7 +91,9 @@ int main(int argc, char** argv)
 			std::cerr << " (at " << product.discount_amount << ')';
 
 		std::cerr << std::endl;
-		api.add_product(product, 1, retrieved_on, c);
+
+		if(!opt.dry_run)
+			api.add_product(product, 1, retrieved_on, c);
 	}, opt.ratelimit);
 
 	s.scrape();

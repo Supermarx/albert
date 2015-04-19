@@ -85,6 +85,7 @@ namespace supermarx
 					subtext == "belgisch assortiment in nl" ||
 					subtext == "alleen online" ||
 					subtext == "online aanbieding" ||
+					subtext == "vandaag" ||
 					boost::regex_match(subtext, what, match_deadline)
 				)
 				{
@@ -127,16 +128,17 @@ namespace supermarx
 			{
 				std::string shield = current_p.shield.get();
 
-				static const boost::regex match_percent_discount("([0-9]+)% korting");
-				static const boost::regex match_euro_discount("([0-9]+) euro korting");
-				static const boost::regex match_eurocent_discount("([0-9]+\\.[0-9]+) euro korting");
+				static const boost::regex match_percent_discount("([0-9]+)% (?:probeer)?korting");
+				static const boost::regex match_euro_discount("([0-9]+) euro (?:probeer)?korting");
+				static const boost::regex match_eurocent_discount("([0-9]+\\.[0-9]+) euro (?:probeer)?korting");
 
 				static const boost::regex match_combination_discount("([0-9]+) voor (&euro; )?([0-9]+\\.[0-9]+)");
 				boost::smatch what;
 
 				if(
 					shield == "bonus" ||
-					shield == "actie"
+					shield == "actie" ||
+					shield == "route 99"
 				)
 				{
 					/* Already covered by ins/del, do nothing */

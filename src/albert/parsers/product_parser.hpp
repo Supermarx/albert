@@ -44,6 +44,7 @@ namespace supermarx
 			boost::optional<unsigned int> del_price, ins_price;
 			boost::optional<std::string> shield, subtext;
 			boost::optional<date> valid_on;
+			boost::optional<std::string> unit;
 		};
 
 		product_proto current_p;
@@ -199,13 +200,90 @@ namespace supermarx
 				}
 			}
 
+			uint64_t volume = 1;
+			measure volume_measure = measure::UNITS;
+
+			if(current_p.unit)
+			{
+				static const boost::regex match_multi("([0-9]+)(?: )?x(?: )?(.+)");
+
+				static const boost::regex match_stuks("(?:ca. )?([0-9]+) (?:st|stuk|stuks|wasbeurten|tabl|plakjes|rollen)");
+				static const boost::regex match_measure("(?:ca. )?([0-9]+(?:\\.[0-9]+)?) (g|gr|gram|kg|ml|cl|lt)");
+				boost::smatch what;
+
+				std::string unit = *current_p.unit;
+				std::replace(unit.begin(), unit.end(), ',', '.');
+
+				uint64_t multiplier = 1;
+				if(boost::regex_match(unit, what, match_multi))
+				{
+					multiplier = boost::lexical_cast<uint64_t>(what[1]);
+					unit = what[2];
+				}
+
+				if(unit == "per stuk" || unit == "per krop" || unit == "per bos" || unit == "per bosje" || unit == "per doos")
+				{
+					// Do nothing
+				}
+				else if(boost::regex_match(unit, what, match_stuks))
+				{
+					volume = boost::lexical_cast<float>(what[1]);
+				}
+				else if(boost::regex_match(unit, what, match_measure))
+				{
+					std::string measure_type = what[2];
+
+					if(measure_type == "g" || measure_type == "gr" || measure_type == "gram")
+					{
+						volume = boost::lexical_cast<float>(what[1])*1000.0;
+						volume_measure = measure::MILLIGRAMS;
+					}
+					else if(measure_type == "kg")
+					{
+						volume = boost::lexical_cast<float>(what[1])*1000000.0;
+						volume_measure = measure::MILLIGRAMS;
+					}
+					else if(measure_type == "ml")
+					{
+						volume = boost::lexical_cast<float>(what[1]);
+						volume_measure = measure::MILLILITERS;
+					}
+					else if(measure_type == "cl")
+					{
+						volume = boost::lexical_cast<float>(what[1])*100.0;
+						volume_measure = measure::MILLILITERS;
+					}
+					else if(measure_type == "lt")
+					{
+						volume = boost::lexical_cast<float>(what[1])*1000.0;
+						volume_measure = measure::MILLILITERS;
+					}
+					else
+					{
+						std::cerr << '[' << current_p.identifier << "] " << current_p.name << std::endl;
+						std::cerr << "measure_type: \'" << measure_type << '\'' << std::endl;
+						conf = confidence::LOW;
+					}
+				}
+				else
+				{
+					std::cerr << '[' << current_p.identifier << "] " << current_p.name << std::endl;
+					std::cerr << "unit: \'" << unit << '\'' << std::endl;
+					conf = confidence::LOW;
+				}
+
+				volume *= multiplier;
+			}
+
 			product_callback(product{
-				 current_p.identifier,
-				 current_p.name,
-				 orig_price,
-				 price,
-				 discount_amount,
-				 current_p.valid_on ? datetime(current_p.valid_on.get(), time()) : datetime_now(),
+				current_p.identifier,
+				current_p.name,
+				volume,
+				volume_measure,
+				orig_price,
+				price,
+				discount_amount,
+				current_p.valid_on ? datetime(current_p.valid_on.get(), time()) : datetime_now(),
 			 }, datetime_now(), conf);
 		}
 
@@ -278,6 +356,15 @@ namespace supermarx
 				{
 					state = S_PRODUCT_PRICE;
 					wc.add([&]() { state = S_PRODUCT; });
+				}
+				else if(qName == "p" && util::contains_attr("unit", att_class))
+				{
+					rec = html_recorder([&](std::string ch) {
+						if(!current_p.unit)
+							current_p.unit = "";
+
+						current_p.unit->append(util::sanitize(ch));
+					});
 				}
 			break;
 			case S_PRODUCT_NAME:

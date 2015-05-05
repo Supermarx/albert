@@ -9,6 +9,8 @@
 #include <albert/parsers/subcategory_parser.hpp>
 #include <albert/parsers/product_parser.hpp>
 
+#include <supermarx/util/stubborn.hpp>
+
 namespace supermarx
 {
 	scraper::scraper(callback_t _callback, unsigned int _ratelimit)
@@ -27,7 +29,11 @@ namespace supermarx
 			todo.emplace_back(domain_uri + c);
 		});
 
-		c_p.parse(dl.fetch(domain_uri + "/producten"));
+		c_p.parse(
+			stubborn::attempt<std::string>([&](){
+				return dl.fetch(domain_uri + "/producten");
+			})
+		);
 
 		while(!todo.empty())
 		{
@@ -47,7 +53,9 @@ namespace supermarx
 			std::string current_uri = todo.front();
 			todo.pop_front();
 
-			std::string src = dl.fetch(current_uri);
+			std::string src = stubborn::attempt<std::string>([&](){
+				return dl.fetch(current_uri);
+			});
 
 			sc_p.parse(src);
 			p_p.parse(src);

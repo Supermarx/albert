@@ -22,7 +22,7 @@ int read_options(cli_options& opt, int argc, char** argv)
 			("help,h", "display this message")
 			("api,a", boost::program_options::value(&opt.api_host), "api host to send results to")
 			("dry-run,d", "does not send products to api when set")
-			("ratelimit,r", boost::program_options::value(&opt.ratelimit), "minimal time between each request in milliseconds (default: 5000)")
+			("ratelimit,r", boost::program_options::value(&opt.ratelimit), "minimal time between each request in milliseconds (default: 30000)")
 			("silent,s", "do not write status reports to cerr");
 
 	boost::program_options::variables_map vm;
@@ -66,7 +66,7 @@ int read_options(cli_options& opt, int argc, char** argv)
 	opt.dry_run = vm.count("dry-run");
 
 	if(!vm.count("ratelimit"))
-		opt.ratelimit = 5000;
+		opt.ratelimit = 30000;
 
 	opt.silent = vm.count("silent");
 

@@ -47,8 +47,6 @@ namespace supermarx
 			std::string current_uri = todo.front();
 			todo.pop_front();
 
-			std::cerr << current_uri << std::endl;
-
 			std::string src = dl.fetch(current_uri);
 
 			sc_p.parse(src);

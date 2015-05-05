@@ -12,6 +12,7 @@ struct cli_options
 	std::string api_host;
 	bool dry_run;
 	unsigned int ratelimit;
+	bool silent;
 };
 
 int read_options(cli_options& opt, int argc, char** argv)
@@ -21,7 +22,8 @@ int read_options(cli_options& opt, int argc, char** argv)
 			("help,h", "display this message")
 			("api,a", boost::program_options::value(&opt.api_host), "api host to send results to")
 			("dry-run,d", "does not send products to api when set")
-			("ratelimit,r", boost::program_options::value(&opt.ratelimit), "minimal time between each request in milliseconds (default: 5000)");
+			("ratelimit,r", boost::program_options::value(&opt.ratelimit), "minimal time between each request in milliseconds (default: 5000)")
+			("silent,s", "do not write status reports to cerr");
 
 	boost::program_options::variables_map vm;
 	boost::program_options::positional_options_description pos;
@@ -66,6 +68,8 @@ int read_options(cli_options& opt, int argc, char** argv)
 	if(!vm.count("ratelimit"))
 		opt.ratelimit = 5000;
 
+	opt.silent = vm.count("silent");
+
 	return EXIT_SUCCESS;
 }
 
@@ -80,17 +84,20 @@ int main(int argc, char** argv)
 	supermarx::api::client api(opt.api_host, "albert (libsupermarx-api)");
 
 	supermarx::scraper s([&](supermarx::product const& product, supermarx::datetime retrieved_on, supermarx::confidence c, supermarx::scraper::problems_t problems) {
-		std::cerr << "Product '" << product.name << "' [" << product.identifier << "] ";
+		if(!opt.silent)
+		{
+			std::cerr << "Product '" << product.name << "' [" << product.identifier << "] ";
 
-		if(product.price == product.orig_price)
-			std::cerr << product.price/100.0f << " EUR";
-		else
-			std::cerr << product.orig_price/100.0f << " EUR -> " << product.price/100.0f << " EUR";
+			if(product.price == product.orig_price)
+				std::cerr << product.price/100.0f << " EUR";
+			else
+				std::cerr << product.orig_price/100.0f << " EUR -> " << product.price/100.0f << " EUR";
 
-		if(product.discount_amount > 1)
-			std::cerr << " (at " << product.discount_amount << ')';
+			if(product.discount_amount > 1)
+				std::cerr << " (at " << product.discount_amount << ')';
 
-		std::cerr << std::endl;
+			std::cerr << std::endl;
+		}
 
 		if(!opt.dry_run)
 			api.add_product(product, 1, retrieved_on, c, problems);

@@ -79,7 +79,7 @@ int main(int argc, char** argv)
 
 	supermarx::api::client api(opt.api_host, "albert (libsupermarx-api)");
 
-	supermarx::scraper s([&](supermarx::product const& product, supermarx::datetime retrieved_on, supermarx::confidence c) {
+	supermarx::scraper s([&](supermarx::product const& product, supermarx::datetime retrieved_on, supermarx::confidence c, supermarx::scraper::problems_t problems) {
 		std::cerr << "Product '" << product.name << "' [" << product.identifier << "] ";
 
 		if(product.price == product.orig_price)
@@ -93,7 +93,7 @@ int main(int argc, char** argv)
 		std::cerr << std::endl;
 
 		if(!opt.dry_run)
-			api.add_product(product, 1, retrieved_on, c);
+			api.add_product(product, 1, retrieved_on, c, problems);
 	}, opt.ratelimit);
 
 	s.scrape();

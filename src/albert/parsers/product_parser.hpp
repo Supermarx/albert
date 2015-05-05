@@ -19,7 +19,7 @@ namespace supermarx
 	class product_parser : public html_parser::default_handler
 	{
 	public:
-		typedef std::function<void(const product&, datetime, confidence)> product_callback_t;
+		typedef std::function<void(const product&, datetime, confidence, std::vector<std::string>)> product_callback_t;
 		typedef std::function<void(std::string)> more_callback_t;
 
 	private:
@@ -45,6 +45,9 @@ namespace supermarx
 			boost::optional<std::string> shield, subtext;
 			boost::optional<date> valid_on;
 			boost::optional<std::string> unit;
+
+			confidence conf = confidence::NEUTRAL;
+			std::vector<std::string> problems;
 		};
 
 		product_proto current_p;
@@ -68,49 +71,206 @@ namespace supermarx
 			return d;
 		}
 
-		void deliver_product()
+		void report_problem_understanding(std::string const& field, std::string const& value)
 		{
-			confidence conf = confidence::NEUTRAL;
+			std::stringstream sstr;
+			sstr << "Unclear '" << field << "'' with value '" << value << "'";
 
-			if(current_p.subtext)
+			current_p.problems.emplace_back(sstr.str());
+		}
+
+		void interpret_shield(std::string const& shield, uint64_t& price, uint64_t& discount_amount)
+		{
+			static const boost::regex match_percent_discount("([0-9]+)% (?:probeer)?korting");
+			static const boost::regex match_euro_discount("([0-9]+) euro (?:probeer)?korting");
+			static const boost::regex match_eurocent_discount("([0-9]+\\.[0-9]+) euro (?:probeer)?korting");
+
+			static const boost::regex match_combination_discount("([0-9]+) voor (&euro; )?([0-9]+\\.[0-9]+)");
+			boost::smatch what;
+
+			if(
+				shield == "bonus" ||
+				shield == "actie" ||
+				shield == "route 99"
+			)
 			{
-				std::string subtext = current_p.subtext.get();
+				/* Already covered by ins/del, do nothing */
 
-				static const boost::regex match_deadline("t/m [0-9]+ [a-z]{3}");
-				boost::smatch what;
+				if(!current_p.del_price)
+				{
+					// Del should be set
+					// Albert Heijn does this sometimes, "BONUS" without being clear what the real bonus is.
 
-				if(
-					subtext == "dit product wordt ah biologisch" ||
-					subtext == "bestel 2 dagen van tevoren" ||
-					subtext == "nieuw in het assortiment" ||
-					subtext == "belgisch assortiment in nl" ||
-					subtext == "alleen online" ||
-					subtext == "online aanbieding" ||
-					subtext == "vandaag" ||
-					boost::regex_match(subtext, what, match_deadline)
-				)
-				{
-					/* No relevant data for us, ignore */
+					// Do nothing
 				}
-				else if(
-					subtext == "binnenkort verkrijgbaar"
-				)
+			}
+			else if(boost::regex_match(shield, what, match_euro_discount))
+			{
+				if(!current_p.del_price)
+					price -= boost::lexical_cast<unsigned int>(what[1])*100;
+			}
+			else if(boost::regex_match(shield, what, match_eurocent_discount))
+			{
+				if(!current_p.del_price)
+					price -= boost::lexical_cast<float>(what[1])*100;
+			}
+			else if(boost::regex_match(shield, what, match_percent_discount))
+			{
+				if(!current_p.del_price)
+					price *= 1.0 - boost::lexical_cast<float>(what[1])/100.0;
+			}
+			else if(shield == "2e halve prijs")
+			{
+				price *= 0.75;
+				discount_amount = 2;
+			}
+			else if(
+				shield == "2=1" ||
+				shield == "1 + 1 gratis"
+			)
+			{
+				price *= 0.5;
+				discount_amount = 2;
+			}
+			else if(shield == "2 + 1 gratis")
+			{
+				price *= 0.67;
+				discount_amount = 3;
+			}
+			else if(boost::regex_match(shield, what, match_combination_discount))
+			{
+				discount_amount = boost::lexical_cast<uint16_t>(what[1]);
+				unsigned int discount_combination_price = boost::lexical_cast<float>(what[3])*100;
+
+				price = discount_combination_price / discount_amount;
+			}
+			else
+			{
+				report_problem_understanding("shield", shield);
+				current_p.conf = confidence::LOW;
+			}
+		}
+
+		void interpret_subtext(std::string const& subtext)
+		{
+			static const boost::regex match_deadline("t/m [0-9]+ [a-z]{3}");
+			boost::smatch what;
+
+			if(
+				subtext == "dit product wordt ah biologisch" ||
+				subtext == "bestel 2 dagen van tevoren" ||
+				subtext == "nieuw in het assortiment" ||
+				subtext == "belgisch assortiment in nl" ||
+				subtext == "alleen online" ||
+				subtext == "online aanbieding" ||
+				subtext == "vandaag" ||
+				boost::regex_match(subtext, what, match_deadline)
+			)
+			{
+				/* No relevant data for us, ignore */
+			}
+			else if(subtext == "binnenkort verkrijgbaar")
+			{
+				return; /* Product not yet available */
+			}
+			else if(subtext == "vanaf maandag")
+			{
+				current_p.valid_on = first_monday(datetime_now().date());
+			}
+			else
+			{
+				report_problem_understanding("subtext", subtext);
+				current_p.conf = confidence::LOW;
+			}
+		}
+
+		void interpret_unit(std::string unit, uint64_t& volume, measure& volume_measure)
+		{
+			static const boost::regex match_multi("([0-9]+)(?: )?[xX](?: )?(.+)");
+
+			static const boost::regex match_stuks("(?:ca. )?([0-9]+) (?:st|stuk|stuks)");
+			static const boost::regex match_irrelevant_stuks("(?:ca. )?([0-9]+) (?:wasbeurten|tabl|plakjes|rollen|bosjes|porties|zakjes|sachets)");
+			static const boost::regex match_pers("(?:ca. )?([0-9]+(?:-[0-9]+)?) pers\\.");
+
+			static const boost::regex match_measure("(?:ca. )?([0-9]+(?:\\.[0-9]+)?)(?: )?(g|gr|gram|kg|kilo|ml|cl|lt|liter)(?:\\.)?");
+			boost::smatch what;
+
+			std::replace(unit.begin(), unit.end(), ',', '.');
+
+			uint64_t multiplier = 1;
+			if(boost::regex_match(unit, what, match_multi))
+			{
+				multiplier = boost::lexical_cast<uint64_t>(what[1]);
+				unit = what[2];
+			}
+
+			if(
+				unit == "per stuk" ||
+				unit == "per krop" ||
+				unit == "per bos" ||
+				unit == "per bosje" ||
+				unit == "per doos" ||
+				unit == "per set" ||
+				unit == "éénkops" ||
+				boost::regex_match(unit, what, match_irrelevant_stuks) ||
+				boost::regex_match(unit, what, match_pers)
+			)
+			{
+				// Do nothing
+			}
+			else if(boost::regex_match(unit, what, match_stuks))
+			{
+				volume = boost::lexical_cast<float>(what[1]);
+			}
+			else if(boost::regex_match(unit, what, match_measure))
+			{
+				std::string measure_type = what[2];
+
+				if(measure_type == "g" || measure_type == "gr" || measure_type == "gram")
 				{
-					return; /* Product not yet available */
+					volume = boost::lexical_cast<float>(what[1])*1000.0;
+					volume_measure = measure::MILLIGRAMS;
 				}
-				else if(
-					subtext == "vanaf maandag"
-				)
+				else if(measure_type == "kg" || measure_type == "kilo")
 				{
-					current_p.valid_on = first_monday(datetime_now().date());
+					volume = boost::lexical_cast<float>(what[1])*1000000.0;
+					volume_measure = measure::MILLIGRAMS;
+				}
+				else if(measure_type == "ml")
+				{
+					volume = boost::lexical_cast<float>(what[1]);
+					volume_measure = measure::MILLILITERS;
+				}
+				else if(measure_type == "cl")
+				{
+					volume = boost::lexical_cast<float>(what[1])*100.0;
+					volume_measure = measure::MILLILITERS;
+				}
+				else if(measure_type == "lt" || measure_type == "liter")
+				{
+					volume = boost::lexical_cast<float>(what[1])*1000.0;
+					volume_measure = measure::MILLILITERS;
 				}
 				else
 				{
-					std::cerr << '[' << current_p.identifier << "] " << current_p.name << std::endl;
-					std::cerr << "subtext: \'" << current_p.subtext.get() << '\'' << std::endl;
-					conf = confidence::LOW;
+					report_problem_understanding("measure_type", measure_type);
+					current_p.conf = confidence::LOW;
+					return;
 				}
 			}
+			else
+			{
+				report_problem_understanding("unit", unit);
+				current_p.conf = confidence::LOW;
+			}
+
+			volume *= multiplier;
+		}
+
+		void deliver_product()
+		{
+			if(current_p.subtext)
+				interpret_subtext(*current_p.subtext);
 
 			uint64_t orig_price, price;
 			uint64_t discount_amount = 1;
@@ -118,173 +278,34 @@ namespace supermarx
 			orig_price = current_p.del_price ? current_p.del_price.get() : current_p.ins_price.get();
 
 			if(!current_p.ins_price)
-			{
-				std::cerr << "product without a price, ignore" << std::endl;
-				return;
-			}
+				return; // Product without a price, ignore
 
 			price = current_p.ins_price.get();
 
 			if(current_p.shield)
-			{
-				std::string shield = current_p.shield.get();
-
-				static const boost::regex match_percent_discount("([0-9]+)% (?:probeer)?korting");
-				static const boost::regex match_euro_discount("([0-9]+) euro (?:probeer)?korting");
-				static const boost::regex match_eurocent_discount("([0-9]+\\.[0-9]+) euro (?:probeer)?korting");
-
-				static const boost::regex match_combination_discount("([0-9]+) voor (&euro; )?([0-9]+\\.[0-9]+)");
-				boost::smatch what;
-
-				if(
-					shield == "bonus" ||
-					shield == "actie" ||
-					shield == "route 99"
-				)
-				{
-					/* Already covered by ins/del, do nothing */
-					if(!current_p.del_price)
-					{
-						std::stringstream sstr;
-						sstr << "Del should be set for " << '[' << current_p.identifier << "] " << current_p.name;
-						// Albert Heijn does this sometimes, "BONUS" without being clear what the real bonus is.
-						//throw std::runtime_error(sstr.str());
-						std::cerr << sstr.str() << std::endl;
-					}
-				}
-				else if(boost::regex_match(shield, what, match_euro_discount))
-				{
-					if(!current_p.del_price)
-						price -= boost::lexical_cast<unsigned int>(what[1])*100;
-				}
-				else if(boost::regex_match(shield, what, match_eurocent_discount))
-				{
-					if(!current_p.del_price)
-						price -= boost::lexical_cast<float>(what[1])*100;
-				}
-				else if(boost::regex_match(shield, what, match_percent_discount))
-				{
-					if(!current_p.del_price)
-						price *= 1.0 - boost::lexical_cast<float>(what[1])/100.0;
-				}
-				else if(shield == "2e halve prijs")
-				{
-					price *= 0.75;
-					discount_amount = 2;
-				}
-				else if(
-					shield == "2=1" ||
-					shield == "1 + 1 gratis"
-				)
-				{
-					price *= 0.5;
-					discount_amount = 2;
-				}
-				else if(shield == "2 + 1 gratis")
-				{
-					price *= 0.67;
-					discount_amount = 3;
-				}
-				else if(boost::regex_match(shield, what, match_combination_discount))
-				{
-					discount_amount = boost::lexical_cast<uint16_t>(what[1]);
-					unsigned int discount_combination_price = boost::lexical_cast<float>(what[3])*100;
-
-					price = discount_combination_price / discount_amount;
-				}
-				else
-				{
-					std::cerr << '[' << current_p.identifier << "] " << current_p.name << std::endl;
-					std::cerr << "shield: \'" << current_p.shield.get() << '\'' << std::endl;
-					conf = confidence::LOW;
-				}
-			}
+				interpret_shield(*current_p.shield, price, discount_amount);
 
 			uint64_t volume = 1;
 			measure volume_measure = measure::UNITS;
 
 			if(current_p.unit)
-			{
-				static const boost::regex match_multi("([0-9]+)(?: )?x(?: )?(.+)");
+				interpret_unit(*current_p.unit, volume, volume_measure);
 
-				static const boost::regex match_stuks("(?:ca. )?([0-9]+) (?:st|stuk|stuks|wasbeurten|tabl|plakjes|rollen)");
-				static const boost::regex match_measure("(?:ca. )?([0-9]+(?:\\.[0-9]+)?) (g|gr|gram|kg|ml|cl|lt)");
-				boost::smatch what;
-
-				std::string unit = *current_p.unit;
-				std::replace(unit.begin(), unit.end(), ',', '.');
-
-				uint64_t multiplier = 1;
-				if(boost::regex_match(unit, what, match_multi))
-				{
-					multiplier = boost::lexical_cast<uint64_t>(what[1]);
-					unit = what[2];
-				}
-
-				if(unit == "per stuk" || unit == "per krop" || unit == "per bos" || unit == "per bosje" || unit == "per doos")
-				{
-					// Do nothing
-				}
-				else if(boost::regex_match(unit, what, match_stuks))
-				{
-					volume = boost::lexical_cast<float>(what[1]);
-				}
-				else if(boost::regex_match(unit, what, match_measure))
-				{
-					std::string measure_type = what[2];
-
-					if(measure_type == "g" || measure_type == "gr" || measure_type == "gram")
-					{
-						volume = boost::lexical_cast<float>(what[1])*1000.0;
-						volume_measure = measure::MILLIGRAMS;
-					}
-					else if(measure_type == "kg")
-					{
-						volume = boost::lexical_cast<float>(what[1])*1000000.0;
-						volume_measure = measure::MILLIGRAMS;
-					}
-					else if(measure_type == "ml")
-					{
-						volume = boost::lexical_cast<float>(what[1]);
-						volume_measure = measure::MILLILITERS;
-					}
-					else if(measure_type == "cl")
-					{
-						volume = boost::lexical_cast<float>(what[1])*100.0;
-						volume_measure = measure::MILLILITERS;
-					}
-					else if(measure_type == "lt")
-					{
-						volume = boost::lexical_cast<float>(what[1])*1000.0;
-						volume_measure = measure::MILLILITERS;
-					}
-					else
-					{
-						std::cerr << '[' << current_p.identifier << "] " << current_p.name << std::endl;
-						std::cerr << "measure_type: \'" << measure_type << '\'' << std::endl;
-						conf = confidence::LOW;
-					}
-				}
-				else
-				{
-					std::cerr << '[' << current_p.identifier << "] " << current_p.name << std::endl;
-					std::cerr << "unit: \'" << unit << '\'' << std::endl;
-					conf = confidence::LOW;
-				}
-
-				volume *= multiplier;
-			}
-
-			product_callback(product{
-				current_p.identifier,
-				current_p.name,
-				volume,
-				volume_measure,
-				orig_price,
-				price,
-				discount_amount,
-				current_p.valid_on ? datetime(current_p.valid_on.get(), time()) : datetime_now(),
-			 }, datetime_now(), conf);
+			product_callback(
+				product{
+					current_p.identifier,
+					current_p.name,
+					volume,
+					volume_measure,
+					orig_price,
+					price,
+					discount_amount,
+					current_p.valid_on ? datetime(current_p.valid_on.get(), time()) : datetime_now(),
+				},
+				datetime_now(),
+				current_p.conf,
+				current_p.problems
+			);
 		}
 
 	public:

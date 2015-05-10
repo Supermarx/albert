@@ -37,6 +37,9 @@ namespace supermarx
 
 		while(!todo.empty())
 		{
+			std::string current_uri = todo.front();
+			todo.pop_front();
+
 			subcategory_parser sc_p(
 				[&](const subcategory_parser::subcategory_uri_t sc)
 			{
@@ -48,10 +51,17 @@ namespace supermarx
 			{
 				todo.push_front(domain_uri + uri);
 			},
-			callback);
-
-			std::string current_uri = todo.front();
-			todo.pop_front();
+			[&](const product& p, boost::optional<std::string> const& image_uri, datetime retrieved_on, confidence conf, problems_t probs)
+			{
+				callback(
+					current_uri,
+					image_uri,
+					p,
+					retrieved_on,
+					conf,
+					probs
+				);
+			});
 
 			std::string src = stubborn::attempt<std::string>([&](){
 				return dl.fetch(current_uri);
@@ -60,5 +70,11 @@ namespace supermarx
 			sc_p.parse(src);
 			p_p.parse(src);
 		}
+	}
+
+	raw scraper::download_image(const std::string& uri)
+	{
+		std::string buf(dl.fetch(uri));
+		return raw(buf.data(), buf.length());
 	}
 }

@@ -11,7 +11,9 @@ struct cli_options
 {
 	std::string api_host;
 	bool dry_run;
-	unsigned int ratelimit;
+	bool extract_images;
+	size_t extract_images_limit;
+	size_t ratelimit;
 	bool silent;
 };
 
@@ -22,6 +24,8 @@ int read_options(cli_options& opt, int argc, char** argv)
 			("help,h", "display this message")
 			("api,a", boost::program_options::value(&opt.api_host), "api host to send results to")
 			("dry-run,d", "does not send products to api when set")
+			("extract-images,i", "extract product images")
+			("extract-images-limit,l", boost::program_options::value(&opt.extract_images_limit), "amount of images allowed to download in one session (default: 60)")
 			("ratelimit,r", boost::program_options::value(&opt.ratelimit), "minimal time between each request in milliseconds (default: 30000)")
 			("silent,s", "do not write status reports to cerr");
 
@@ -64,6 +68,10 @@ int read_options(cli_options& opt, int argc, char** argv)
 		opt.api_host = "https://api.supermarx.nl";
 
 	opt.dry_run = vm.count("dry-run");
+	opt.extract_images = vm.count("extract-images");
+
+	if(!vm.count("extract-images-limit"))
+		opt.extract_images_limit = 60;
 
 	if(!vm.count("ratelimit"))
 		opt.ratelimit = 30000;
@@ -82,8 +90,17 @@ int main(int argc, char** argv)
 		return result;
 
 	supermarx::api::client api(opt.api_host, "albert (libsupermarx-api)");
+	const supermarx::id_t supermarket_id = 1;
+	size_t images_downloaded = 0;
 
-	supermarx::scraper s([&](supermarx::product const& product, supermarx::datetime retrieved_on, supermarx::confidence c, supermarx::scraper::problems_t problems) {
+	supermarx::scraper s([&](
+		std::string const& source_uri,
+		boost::optional<std::string> const& image_uri_opt,
+		supermarx::product const& product,
+		supermarx::datetime retrieved_on,
+		supermarx::confidence c,
+		supermarx::scraper::problems_t problems
+	) {
 		if(!opt.silent)
 		{
 			std::cerr << "Product '" << product.name << "' [" << product.identifier << "] ";
@@ -100,7 +117,37 @@ int main(int argc, char** argv)
 		}
 
 		if(!opt.dry_run)
-			api.add_product(product, 1, retrieved_on, c, problems);
+			api.add_product(product, supermarket_id, retrieved_on, c, problems);
+
+		if(opt.extract_images && image_uri_opt)
+		{
+			bool permission = false;
+			if(opt.dry_run)
+				permission = true;
+			else
+			{
+				supermarx::api::product_summary ps(api.get_product(supermarket_id, product.identifier));
+				if(!ps.imagecitation_id)
+					permission = true;
+			}
+
+			if(permission && images_downloaded < opt.extract_images_limit)
+			{
+				supermarx::raw img(s.download_image(*image_uri_opt));
+
+				if(!opt.dry_run)
+					api.add_product_image_citation(
+						supermarket_id,
+						product.identifier,
+						*image_uri_opt,
+						source_uri,
+						supermarx::datetime_now(),
+						std::move(img)
+					);
+
+				images_downloaded++;
+			}
+		}
 	}, opt.ratelimit);
 
 	s.scrape();

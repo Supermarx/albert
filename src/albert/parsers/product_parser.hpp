@@ -19,7 +19,7 @@ namespace supermarx
 	class product_parser : public html_parser::default_handler
 	{
 	public:
-		typedef std::function<void(const product&, datetime, confidence, std::vector<std::string>)> product_callback_t;
+		typedef std::function<void(const product&, boost::optional<std::string>, datetime, confidence, std::vector<std::string>)> product_callback_t;
 		typedef std::function<void(std::string)> more_callback_t;
 
 	private:
@@ -41,6 +41,7 @@ namespace supermarx
 		struct product_proto
 		{
 			std::string identifier, name;
+			boost::optional<std::string> image_uri;
 			boost::optional<unsigned int> del_price, ins_price;
 			boost::optional<std::string> shield, subtext;
 			boost::optional<date> valid_on;
@@ -302,6 +303,7 @@ namespace supermarx
 					discount_amount,
 					current_p.valid_on ? datetime(current_p.valid_on.get(), time()) : datetime_now(),
 				},
+				current_p.image_uri,
 				datetime_now(),
 				current_p.conf,
 				current_p.problems
@@ -386,6 +388,20 @@ namespace supermarx
 
 						current_p.unit->append(util::sanitize(ch));
 					});
+				}
+				else if(qName == "img" && atts.getValue("data-appie") == "lazyload")
+				{
+					std::string image_uri = atts.getValue("data-original");
+					if(image_uri == "")
+						break;
+
+					static const boost::regex match_image_uri("(.+)_200x200_JPG\\.JPG");
+					boost::smatch what;
+
+					if(boost::regex_match(image_uri, what, match_image_uri))
+						current_p.image_uri = what[1] + "_LowRes_JPG.JPG"; // Replace with fullres variant
+					else
+						current_p.image_uri = image_uri; // Some other (old) image)
 				}
 			break;
 			case S_PRODUCT_NAME:

@@ -3,6 +3,7 @@
 #include <functional>
 
 #include <supermarx/product.hpp>
+#include <supermarx/raw.hpp>
 #include <supermarx/util/downloader.hpp>
 
 namespace supermarx
@@ -11,7 +12,7 @@ namespace supermarx
 	{
 	public:
 		using problems_t = std::vector<std::string>;
-		using callback_t = std::function<void(const product&, datetime, confidence, problems_t)>;
+		using callback_t = std::function<void(const std::string&, boost::optional<std::string> const&, const product&, datetime, confidence, problems_t)>;
 
 	private:
 		callback_t callback;
@@ -23,5 +24,6 @@ namespace supermarx
 		void operator=(scraper&) = delete;
 
 		void scrape();
+		raw download_image(const std::string& uri);
 	};
 }

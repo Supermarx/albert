@@ -392,7 +392,7 @@ namespace supermarx
 				else if(qName == "img" && atts.getValue("data-appie") == "lazyload")
 				{
 					std::string image_uri = atts.getValue("data-original");
-					if(image_uri == "")
+					if(image_uri == "" || boost::algorithm::ends_with(image_uri, "product-card-no-product-image.png"))
 						break;
 
 					static const boost::regex match_image_uri("(.+)_200x200_JPG\\.JPG");

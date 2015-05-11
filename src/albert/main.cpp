@@ -136,6 +136,9 @@ int main(int argc, char** argv)
 				supermarx::raw img(s.download_image(*image_uri_opt));
 
 				if(!opt.dry_run)
+				{
+					try
+					{
 					api.add_product_image_citation(
 						supermarket_id,
 						product.identifier,
@@ -144,6 +147,11 @@ int main(int argc, char** argv)
 						supermarx::datetime_now(),
 						std::move(img)
 					);
+					} catch(std::runtime_error const& e)
+					{
+						std::cerr << "Catched error whilst pushing image for " << product.identifier << " " << *image_uri_opt << std::endl;
+					}
+				}
 
 				images_downloaded++;
 			}

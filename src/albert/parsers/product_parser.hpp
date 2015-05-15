@@ -75,7 +75,7 @@ namespace supermarx
 		void report_problem_understanding(std::string const& field, std::string const& value)
 		{
 			std::stringstream sstr;
-			sstr << "Unclear '" << field << "'' with value '" << value << "'";
+			sstr << "Unclear '" << field << "' with value '" << value << "'";
 
 			current_p.problems.emplace_back(sstr.str());
 		}

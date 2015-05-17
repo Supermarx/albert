@@ -1,6 +1,6 @@
 project(albert)
 
-find_package(Boost COMPONENTS system program_options regex locale date_time REQUIRED)
+find_package(Boost COMPONENTS system program_options regex locale date_time filesystem REQUIRED)
 
 include_directories(SYSTEM
                     ${Boost_INCLUDE_DIRS}

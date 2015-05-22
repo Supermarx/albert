@@ -276,10 +276,10 @@ namespace supermarx
 			uint64_t orig_price, price;
 			uint64_t discount_amount = 1;
 
-			orig_price = current_p.del_price ? current_p.del_price.get() : current_p.ins_price.get();
-
 			if(!current_p.ins_price)
 				return; // Product without a price, ignore
+
+			orig_price = current_p.del_price ? current_p.del_price.get() : current_p.ins_price.get();
 
 			price = current_p.ins_price.get();
 

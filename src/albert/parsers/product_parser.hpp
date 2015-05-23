@@ -189,7 +189,6 @@ namespace supermarx
 					if(what[2] == months[i])
 					{
 						current_p.valid_on = next_occurance(i+1, boost::lexical_cast<size_t>(what[1]));
-						std::cerr << to_string(*current_p.valid_on) << std::endl;
 						return;
 					}
 

@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <stdexcept>
+#include <array>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/regex.hpp>
@@ -127,6 +128,7 @@ namespace supermarx
 			}
 			else if(
 				shield == "2=1" ||
+				shield == "2 = 1" ||
 				shield == "1 + 1 gratis"
 			)
 			{
@@ -155,6 +157,7 @@ namespace supermarx
 		void interpret_subtext(std::string const& subtext)
 		{
 			static const boost::regex match_deadline("t/m [0-9]+ [a-z]{3}");
+			static const boost::regex match_start("vanaf ([0-9]+) ([a-z]{3})");
 			boost::smatch what;
 
 			if(
@@ -165,6 +168,7 @@ namespace supermarx
 				subtext == "alleen online" ||
 				subtext == "online aanbieding" ||
 				subtext == "vandaag" ||
+				subtext == "t/m maandag" ||
 				boost::regex_match(subtext, what, match_deadline)
 			)
 			{
@@ -177,6 +181,20 @@ namespace supermarx
 			else if(subtext == "vanaf maandag")
 			{
 				current_p.valid_on = first_monday(datetime_now().date());
+			}
+			else if(boost::regex_match(subtext, what, match_start))
+			{
+				const static std::array<std::string, 12> months({{"jan", "feb", "maa", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"}});
+				for(size_t i = 0; i < months.size(); ++i)
+					if(what[2] == months[i])
+					{
+						current_p.valid_on = next_occurance(i+1, boost::lexical_cast<size_t>(what[1]));
+						std::cerr << to_string(*current_p.valid_on) << std::endl;
+						return;
+					}
+
+				report_problem_understanding("date_start", subtext);
+				current_p.conf = confidence::LOW;
 			}
 			else
 			{

@@ -51,7 +51,7 @@ namespace supermarx
 			{
 				todo.push_front(domain_uri + uri);
 			},
-			[&](const product& p, boost::optional<std::string> const& image_uri, datetime retrieved_on, confidence conf, problems_t probs)
+			[&](const message::product_base& p, boost::optional<std::string> const& image_uri, datetime retrieved_on, confidence conf, problems_t probs)
 			{
 				callback(
 					current_uri,

@@ -31,7 +31,7 @@ namespace supermarx
 
 		c_p.parse(
 			stubborn::attempt<std::string>([&](){
-				return dl.fetch(domain_uri + "/producten");
+				return dl.fetch(domain_uri + "/producten").body;
 			})
 		);
 
@@ -64,7 +64,7 @@ namespace supermarx
 			});
 
 			std::string src = stubborn::attempt<std::string>([&](){
-				return dl.fetch(current_uri);
+				return dl.fetch(current_uri).body;
 			});
 
 			sc_p.parse(src);
@@ -74,7 +74,7 @@ namespace supermarx
 
 	raw scraper::download_image(const std::string& uri)
 	{
-		std::string buf(dl.fetch(uri));
+		std::string buf(dl.fetch(uri).body);
 		return raw(buf.data(), buf.length());
 	}
 }

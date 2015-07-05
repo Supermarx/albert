@@ -20,9 +20,10 @@ namespace supermarx
 	private:
 		callback_t callback;
 		cached_downloader dl;
+		bool register_tags;
 
 	public:
-		scraper(callback_t _callback, unsigned int ratelimit = 5000, bool cache = false);
+		scraper(callback_t _callback, unsigned int ratelimit = 5000, bool cache = false, bool register_tags = false);
 		scraper(scraper&) = delete;
 		void operator=(scraper&) = delete;
 

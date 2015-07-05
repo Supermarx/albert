@@ -16,8 +16,13 @@ namespace supermarx
 	class category_parser : public html_parser::default_handler
 	{
 	public:
-		typedef std::string category_uri_t;
-		typedef std::function<void(category_uri_t)> category_callback_t;
+		struct category_info_t
+		{
+			std::string uri;
+			std::string name;
+		};
+
+		typedef std::function<void(category_info_t)> category_callback_t;
 
 	private:
 		enum state_e {
@@ -28,6 +33,7 @@ namespace supermarx
 
 		category_callback_t category_callback;
 
+		boost::optional<html_recorder> rec;
 		html_watcher_collection wc;
 
 		state_e state;
@@ -35,6 +41,7 @@ namespace supermarx
 	public:
 		category_parser(category_callback_t category_callback_)
 		: category_callback(category_callback_)
+		, rec()
 		, wc()
 		, state(S_INIT)
 		{}
@@ -47,6 +54,9 @@ namespace supermarx
 
 		virtual void startElement(const std::string& /* namespaceURI */, const std::string& /* localName */, const std::string& qName, const AttributesT& atts)
 		{
+			if(rec)
+				rec.get().startElement();
+
 			wc.startElement();
 
 			switch(state)
@@ -63,15 +73,29 @@ namespace supermarx
 			break;
 			case S_CATEGORIES:
 				if(qName == "a")
-					category_callback(atts.getValue("href"));
+				{
+					std::string href = atts.getValue("href");
+					rec = html_recorder([this, href](std::string ch) {
+						category_callback(category_info_t{href, util::sanitize(ch)});
+					});
+				}
 			break;
 			case S_DONE:
 			break;
 			}
 		}
 
+		virtual void characters(const std::string& ch)
+		{
+			if(rec)
+				rec.get().characters(ch);
+		}
+
 		virtual void endElement(const std::string& /* namespaceURI */, const std::string& /* localName */, const std::string& /* qName */)
 		{
+			if(rec && rec.get().endElement())
+				rec = boost::none;
+
 			wc.endElement();
 		}
 	};

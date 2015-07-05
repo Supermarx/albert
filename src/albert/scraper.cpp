@@ -20,13 +20,19 @@ namespace supermarx
 
 	void scraper::scrape()
 	{
+		struct category_t
+		{
+			std::string uri;
+			std::string name;
+		};
+
 		static const std::string domain_uri = "http://www.ah.nl";
-		std::deque<std::string> todo;
+		std::deque<category_t> todo;
 
 		category_parser c_p(
-			[&](const category_parser::category_uri_t c)
+			[&](const category_parser::category_info_t c)
 		{
-			todo.emplace_back(domain_uri + c);
+			todo.push_back({domain_uri + c.uri, c.name});
 		});
 
 		c_p.parse(
@@ -37,26 +43,27 @@ namespace supermarx
 
 		while(!todo.empty())
 		{
-			std::string current_uri = todo.front();
+			category_t current_cat(todo.front());
 			todo.pop_front();
 
 			subcategory_parser sc_p(
-				[&](const subcategory_parser::subcategory_uri_t sc)
+				[&](const subcategory_parser::subcategory_info_t sc)
 			{
-				todo.push_back(domain_uri + sc);
+				todo.push_back({domain_uri + sc.uri, sc.name});
 			});
 
 			product_parser p_p(
 			[&](const std::string uri)
 			{
-				todo.push_front(domain_uri + uri);
+				todo.push_back({domain_uri + uri, current_cat.name});
 			},
 			[&](const message::product_base& p, boost::optional<std::string> const& image_uri, datetime retrieved_on, confidence conf, problems_t probs)
 			{
 				callback(
-					current_uri,
+					current_cat.uri,
 					image_uri,
 					p,
+					{message::tag{current_cat.name, std::string("category")}},
 					retrieved_on,
 					conf,
 					probs
@@ -64,7 +71,7 @@ namespace supermarx
 			});
 
 			std::string src = stubborn::attempt<std::string>([&](){
-				return dl.fetch(current_uri).body;
+				return dl.fetch(current_cat.uri).body;
 			});
 
 			sc_p.parse(src);

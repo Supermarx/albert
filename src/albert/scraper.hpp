@@ -1,8 +1,11 @@
 #pragma once
 
+#include <vector>
 #include <functional>
 
 #include <supermarx/message/product_base.hpp>
+#include <supermarx/message/tag.hpp>
+
 #include <supermarx/raw.hpp>
 #include <supermarx/util/cached_downloader.hpp>
 
@@ -12,7 +15,7 @@ namespace supermarx
 	{
 	public:
 		using problems_t = std::vector<std::string>;
-		using callback_t = std::function<void(const std::string&, boost::optional<std::string> const&, const message::product_base&, datetime, confidence, problems_t)>;
+		using callback_t = std::function<void(const std::string&, boost::optional<std::string> const&, const message::product_base&, std::vector<message::tag> const&, datetime, confidence, problems_t)>;
 
 	private:
 		callback_t callback;

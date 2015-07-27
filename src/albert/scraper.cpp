@@ -43,6 +43,7 @@ namespace supermarx
 		static const std::string domain_uri = "http://www.ah.nl";
 		static const std::string rest_uri = domain_uri + "/service/rest";
 		std::deque<page_t> todo;
+		std::set<std::string> blacklist;
 
 		{
 			Json::Value producten_root(parse_json(dl_f(rest_uri + "/producten")));
@@ -59,7 +60,7 @@ namespace supermarx
 
 					remove_hyphens(title);
 
-					todo.push_back({rest_uri + uri, title, true, {message::tag{title, std::string("category")}}});
+					todo.push_back({rest_uri + uri, title, true, {message::tag{title, std::string("Soort")}}});
 				}
 			}
 		}
@@ -69,20 +70,31 @@ namespace supermarx
 			page_t current_page(todo.front());
 			todo.pop_front();
 
+			if(!blacklist.insert(current_page.uri).second) // Already visited uri
+				continue;
+
 			if(current_page.name.find('/') != std::string::npos) // Bug in AH server, will get 404
 				continue;
 
 			if(current_page.uri.find("merk=100%") != std::string::npos) // Ditto
 				continue;
 
-			std::cerr << current_page.name << ": " << current_page.uri << std::endl;
-			std::cerr << todo.size() << std::endl;
+			//std::cerr << current_page.name << ": " << current_page.uri << std::endl;
 
+			/* Two modes:
+			 * - register_tags, fetches all products via the "Filters", goes through them in-order.
+			 * - !register_tags, fetches all products via inline ProductLanes and SeeMore widgets
+			 * The first takes an order more time than the second.
+			 * The first actually maps all categories and tags, which do not change often.
+			 * I suggest you run a scrape with this tag at most once a week.
+			 * Use sparingly.
+			 */
 			Json::Value cat_root(parse_json(dl_f(current_page.uri)));
 			for(auto const& lane : cat_root["_embedded"]["lanes"])
 			{
-				if(lane["id"].asString() == "Filters" && current_page.expand)
+				if(register_tags && lane["id"].asString() == "Filters" && current_page.expand)
 				{
+					// Only process filters exhaustively if register_tags is enabled
 					for(auto const& filter_bar : lane["_embedded"]["items"])
 					{
 						if(filter_bar["resourceType"].asString() != "FilterBar")
@@ -110,13 +122,43 @@ namespace supermarx
 				}
 				else if(lane["type"].asString() == "ProductLane")
 				{
+					std::string lane_name = lane["id"].asString();
+
+					std::vector<message::tag> tags;
+					tags.insert(tags.end(), current_page.tags.begin(), current_page.tags.end());
+					tags.push_back({lane_name, std::string("Soort")});
+
 					for(auto const& lane_item : lane["_embedded"]["items"])
 					{
-						if(lane_item["type"].asString() != "Product")
-							continue;
+						std::string lane_type = lane_item["type"].asString();
+						if(lane_type == "Product")
+						{
+							auto const& product = lane_item["_embedded"]["productCard"]["_embedded"]["product"];
+							interpreter::interpret(product, current_page, callback);
+						}
+						else if(!register_tags && lane_type == "SeeMore")
+						{
+							if(lane_item["navItem"]["link"]["pageType"] == "legacy") // Old-style page in SeeMore Editorial
+								continue;
 
-						auto const& product = lane_item["_embedded"]["productCard"]["_embedded"]["product"];
-						interpreter::interpret(product, current_page, callback);
+							std::string uri = lane_item["navItem"]["link"]["href"].asString();
+							todo.push_front({rest_uri + "/" + uri, lane_name, true, tags});
+						}
+					}
+				}
+				else if(lane["type"].asString() == "SeeMoreLane")
+				{
+					for(auto const& lane_item : lane["_embedded"]["items"])
+					{
+						std::string title = lane_item["text"]["title"].asString();
+						remove_hyphens(title);
+						std::string uri = lane_item["navItem"]["link"]["href"].asString();
+
+						std::vector<message::tag> tags;
+						tags.insert(tags.end(), current_page.tags.begin(), current_page.tags.end());
+						tags.push_back({title, std::string("Soort")});
+
+						todo.push_front({rest_uri + "/" + uri, title, true, tags});
 					}
 				}
 			}

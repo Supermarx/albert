@@ -73,8 +73,8 @@ namespace supermarx
 			if(!blacklist.insert(current_page.uri).second) // Already visited uri
 				continue;
 
-			//if(current_page.uri.find('/') != std::string::npos) // Bug in AH server, will get 404
-			//	continue;
+			if(current_page.uri.find("%2F") != std::string::npos) // Bug in AH server, will get 404
+				continue;
 
 			if(current_page.uri.find("merk=100%") != std::string::npos) // Ditto
 				continue;

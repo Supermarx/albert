@@ -15,17 +15,6 @@
 
 namespace supermarx
 {
-	Json::Value parse_json(std::string const& src)
-	{
-		Json::Value root;
-		Json::Reader reader;
-
-		if(!reader.parse(src, root, false))
-			throw std::runtime_error("Could not parse json feed");
-
-		return root;
-	}
-
 	scraper::scraper(callback_t _callback, unsigned int _ratelimit, bool _cache, bool _register_tags)
 	: callback(_callback)
 	, dl("supermarx albert/1.1", _ratelimit, _cache ? boost::optional<std::string>("./cache") : boost::none)
@@ -34,9 +23,18 @@ namespace supermarx
 
 	void scraper::scrape()
 	{
-		auto dl_f([&](std::string const& uri) -> std::string {
-			return stubborn::attempt<std::string>([&](){
-				return dl.fetch(uri).body;
+		auto dl_f([&](std::string const& uri) -> Json::Value {
+			return stubborn::attempt<Json::Value>([&](){
+				Json::Value root;
+				Json::Reader reader;
+
+				if(!reader.parse(dl.fetch(uri).body, root, false))
+				{
+					dl.clear(uri);
+					throw std::runtime_error("Could not parse json feed");
+				}
+
+				return root;
 			});
 		});
 
@@ -46,7 +44,7 @@ namespace supermarx
 		std::set<std::string> blacklist;
 
 		{
-			Json::Value producten_root(parse_json(dl_f(rest_uri + "/producten")));
+			Json::Value producten_root(dl_f(rest_uri + "/producten"));
 
 			for(auto const& lane : producten_root["_embedded"]["lanes"])
 			{
@@ -87,7 +85,7 @@ namespace supermarx
 			 * I suggest you run a scrape with this tag at most once a week.
 			 * Use sparingly.
 			 */
-			Json::Value cat_root(parse_json(dl_f(current_page.uri)));
+			Json::Value cat_root(dl_f(current_page.uri));
 			for(auto const& lane : cat_root["_embedded"]["lanes"])
 			{
 				if(register_tags && lane["id"].asString() == "Filters" && current_page.expand)

@@ -278,6 +278,22 @@ private:
 		return {orig_price, price, discount_amount};
 	}
 
+	inline datetime parse_valid_on(Json::Value const& product)
+	{
+		if(product["discount"]["period"].empty())
+			return datetime_now();
+
+		std::string period = product["discount"]["period"].asString();
+
+		if(period == "vanaf maandag")
+			return datetime(first_monday(datetime_now().date()));
+
+		report_problem_understanding("discount-period", period);
+		conf = confidence::LOW;
+
+		return datetime_now();
+	}
+
 	inline void parse_product(Json::Value const& product, page_t const& current_page, scraper::callback_t const& callback)
 	{
 		std::string identifier(product["id"].asString());
@@ -287,7 +303,7 @@ private:
 		volume_t volume = interpret_unit(product["unitSize"].asString());
 		prices_t prices = parse_price(product);
 
-		datetime valid_on = datetime_now(); // TODO, unclear how this is represented at time of writing. Need to wait until Friday or similar.
+		datetime valid_on = parse_valid_on(product);
 
 		message::product_base p({
 			identifier,

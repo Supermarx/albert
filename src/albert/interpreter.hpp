@@ -294,7 +294,7 @@ private:
 		return datetime_now();
 	}
 
-	inline void parse_product(Json::Value const& product, page_t const& current_page, scraper::callback_t const& callback)
+	inline void parse_product(Json::Value const& product, page_t const& current_page, scraper::product_callback_t const& callback)
 	{
 		std::string identifier(product["id"].asString());
 		std::string name(product["description"].asString());
@@ -313,14 +313,14 @@ private:
 			prices.orig_price,
 			prices.price,
 			prices.discount_amount,
-			valid_on
+			valid_on,
+			current_page.tags
 		});
 
 		callback(
 			current_page.uri,
 			parse_image_uri(product),
 			p,
-			current_page.tags,
 			datetime_now(),
 			conf,
 			probs
@@ -328,7 +328,7 @@ private:
 	}
 
 public:
-	static void interpret(Json::Value const& product, page_t const& current_page, scraper::callback_t const& callback)
+	static void interpret(Json::Value const& product, page_t const& current_page, scraper::product_callback_t const& callback)
 	{
 		interpreter i;
 		i.parse_product(product, current_page, callback);

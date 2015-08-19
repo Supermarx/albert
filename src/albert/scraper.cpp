@@ -15,8 +15,9 @@
 
 namespace supermarx
 {
-	scraper::scraper(callback_t _callback, unsigned int _ratelimit, bool _cache, bool _register_tags)
-	: callback(_callback)
+	scraper::scraper(product_callback_t _product_callback, tag_hierarchy_callback_t _tag_hierarchy_callback, unsigned int _ratelimit, bool _cache, bool _register_tags)
+	: product_callback(_product_callback)
+	, tag_hierarchy_callback(_tag_hierarchy_callback)
 	, dl("supermarx albert/1.1", _ratelimit, _cache ? boost::optional<std::string>("./cache") : boost::none)
 	, register_tags(_register_tags)
 	{}
@@ -42,6 +43,36 @@ namespace supermarx
 		static const std::string rest_uri = domain_uri + "/service/rest";
 		std::deque<page_t> todo;
 		std::set<std::string> blacklist;
+
+		std::map<message::tag, std::set<message::tag>> tag_hierarchy; // tag_hierarchy[parent] = children_set;
+
+		auto add_tag_to_hierarchy_f([&](std::vector<message::tag> const& _parent_tags, message::tag const& current_tag) {
+			if(current_tag.category != "Soort")
+				return; // Other categories do not possess an hierarchy.
+
+			std::vector<message::tag> parent_tags(_parent_tags.size());
+			std::reverse_copy(std::begin(_parent_tags), std::end(_parent_tags), std::begin(parent_tags));
+			auto parent_it = std::find_if(std::begin(parent_tags), std::end(parent_tags), [&](message::tag const& t){
+				return t.category == current_tag.category;
+			});
+
+			if(parent_it == std::end(parent_tags))
+				return; // Do not add
+
+			message::tag const& parent_tag = *parent_it;
+
+			auto hierarchy_it(tag_hierarchy.find(parent_tag));
+			if(hierarchy_it == std::end(tag_hierarchy))
+				tag_hierarchy.emplace(parent_tag, std::set<message::tag>({ current_tag }));
+			else
+			{
+				if(!hierarchy_it->second.emplace(current_tag).second)
+					return;
+			}
+
+			// Emit hierarchy finding
+			tag_hierarchy_callback(parent_tag, current_tag);
+		});
 
 		{
 			Json::Value producten_root(dl_f(rest_uri + "/producten"));
@@ -105,9 +136,12 @@ namespace supermarx
 								std::string title = cat["label"].asString();
 								remove_hyphens(title);
 
+								message::tag tag({title, filter_label});
+								add_tag_to_hierarchy_f(current_page.tags, tag);
+
 								std::vector<message::tag> tags;
 								tags.insert(tags.end(), current_page.tags.begin(), current_page.tags.end());
-								tags.push_back({title, filter_label});
+								tags.push_back(tag);
 
 								todo.push_front({rest_uri + "/" + uri, title, true, tags});
 							}
@@ -130,7 +164,7 @@ namespace supermarx
 						if(lane_type == "Product")
 						{
 							auto const& product = lane_item["_embedded"]["productCard"]["_embedded"]["product"];
-							interpreter::interpret(product, current_page, callback);
+							interpreter::interpret(product, current_page, product_callback);
 						}
 						else if(!register_tags && lane_type == "SeeMore")
 						{

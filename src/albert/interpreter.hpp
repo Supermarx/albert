@@ -109,7 +109,7 @@ private:
 			}
 			else if(measure_type == "cl")
 			{
-				return {volume*100.0f, measure::MILLILITRES};
+				return {volume*10.0f, measure::MILLILITRES};
 			}
 			else if(measure_type == "lt" || measure_type == "liter")
 			{

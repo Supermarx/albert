@@ -1,9 +1,13 @@
 #pragma once
 
+#include <jsoncpp/json/json.h>
+
 #include <supermarx/raw.hpp>
 #include <supermarx/util/cached_downloader.hpp>
 
 #include <supermarx/scraper/scraper_prototype.hpp>
+
+#include <albert/page.hpp>
 
 namespace supermarx
 {
@@ -20,6 +24,18 @@ namespace supermarx
 
 		cached_downloader dl;
 		bool register_tags;
+
+		std::deque<page_t> todo;
+		std::set<std::string> blacklist;
+
+		std::map<message::tag, std::set<message::tag>> tag_hierarchy; // tag_hierarchy[parent] = children_set;
+
+		Json::Value download(std::string const& uri);
+		void add_tag_to_hierarchy_f(std::vector<message::tag> const& _parent_tags, message::tag const& current_tag);
+
+		void parse_filterlane(Json::Value const& lane, page_t const& current_page);
+		void parse_productlane(Json::Value const& lane, page_t const& current_page);
+		void parse_seemorelane(Json::Value const& lane, page_t const& current_page);
 
 	public:
 		scraper(product_callback_t _product_callback, tag_hierarchy_callback_t _tag_hierarchy_callback, unsigned int ratelimit = 5000, bool cache = false, bool register_tags = false);

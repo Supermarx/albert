@@ -188,22 +188,30 @@ namespace supermarx
 			 * I suggest you run a scrape with this tag at most once a week.
 			 * Use sparingly.
 			 */
-			Json::Value cat_root(download(current_page.uri));
-			for(auto const& lane : cat_root["_embedded"]["lanes"])
+			try
 			{
-				if(register_tags && lane["id"].asString() == "Filters" && current_page.expand)
+				Json::Value cat_root(download(current_page.uri));
+				for(auto const& lane : cat_root["_embedded"]["lanes"])
 				{
-					// Only process filters exhaustively if register_tags is enabled
-					parse_filterlane(lane, current_page);
+					if(register_tags && lane["id"].asString() == "Filters" && current_page.expand)
+					{
+						// Only process filters exhaustively if register_tags is enabled
+						parse_filterlane(lane, current_page);
+					}
+					else if(lane["type"].asString() == "ProductLane")
+					{
+						parse_productlane(lane, current_page);
+					}
+					else if(!register_tags && lane["type"].asString() == "SeeMoreLane")
+					{
+						parse_seemorelane(lane, current_page);
+					}
 				}
-				else if(lane["type"].asString() == "ProductLane")
-				{
-					parse_productlane(lane, current_page);
-				}
-				else if(!register_tags && lane["type"].asString() == "SeeMoreLane")
-				{
-					parse_seemorelane(lane, current_page);
-				}
+			} catch(std::runtime_error const& e)
+			{
+				std::cerr << "Error occurred whilst downloading or parsing " << current_page.uri << std::endl;
+				std::cerr << " " << e.what() << std::endl;
+				continue; // Skip for now
 			}
 		}
 	}

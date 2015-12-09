@@ -4,6 +4,7 @@
 
 #include <supermarx/raw.hpp>
 #include <supermarx/util/cached_downloader.hpp>
+#include <supermarx/util/download_manager.hpp>
 
 #include <supermarx/scraper/scraper_prototype.hpp>
 
@@ -23,6 +24,8 @@ namespace supermarx
 		tag_hierarchy_callback_t tag_hierarchy_callback;
 
 		cached_downloader dl;
+		download_manager m;
+
 		bool register_tags;
 
 		std::deque<page_t> todo;
@@ -30,7 +33,13 @@ namespace supermarx
 
 		std::map<message::tag, std::set<message::tag>> tag_hierarchy; // tag_hierarchy[parent] = children_set;
 
+		bool is_blacklisted(std::string const& uri);
+
+		Json::Value parse(std::string const& uri, std::string const& body);
 		Json::Value download(std::string const& uri);
+
+		void process(page_t const& current_page, downloader::response const & response);
+
 		void add_tag_to_hierarchy_f(std::vector<message::tag> const& _parent_tags, message::tag const& current_tag);
 
 		void parse_filterlane(Json::Value const& lane, page_t const& current_page);

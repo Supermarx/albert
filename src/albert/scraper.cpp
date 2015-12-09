@@ -5,8 +5,6 @@
 #include <fstream>
 #include <boost/locale.hpp>
 
-#include <supermarx/util/stubborn.hpp>
-
 #include <albert/util.hpp>
 #include <albert/interpreter.hpp>
 
@@ -18,27 +16,79 @@ namespace supermarx
 	scraper::scraper(product_callback_t _product_callback, tag_hierarchy_callback_t _tag_hierarchy_callback, unsigned int _ratelimit, bool _cache, bool _register_tags)
 	: product_callback(_product_callback)
 	, tag_hierarchy_callback(_tag_hierarchy_callback)
-	, dl("supermarx albert/1.1", _ratelimit, _cache ? boost::optional<std::string>("./cache") : boost::none)
+	, dl("supermarx albert/1.2", _ratelimit, _cache ? boost::optional<std::string>("./cache") : boost::none)
+	, m(dl)
 	, register_tags(_register_tags)
 	, todo()
 	, blacklist()
 	, tag_hierarchy()
 	{}
 
+	Json::Value scraper::parse(std::string const& uri, std::string const& body)
+	{
+		Json::Value root;
+		Json::Reader reader;
+
+		if(!reader.parse(body, root, false))
+		{
+			dl.clear(uri);
+			throw std::runtime_error("Could not parse json feed");
+		}
+
+		return root;
+	}
+
 	Json::Value scraper::download(std::string const& uri)
 	{
 		return stubborn::attempt<Json::Value>([&](){
-			Json::Value root;
-			Json::Reader reader;
-
-			if(!reader.parse(dl.fetch(uri).body, root, false))
-			{
-				dl.clear(uri);
-				throw std::runtime_error("Could not parse json feed");
-			}
-
-			return root;
+			return parse(uri, dl.fetch(uri).body);
 		});
+	}
+
+	bool scraper::is_blacklisted(std::string const& uri)
+	{
+		if(!blacklist.insert(uri).second) // Already visited uri
+			return true;
+
+		if(uri.find("%2F") != std::string::npos) // Bug in AH server, will get 404
+			return true;
+
+		if(uri.find("merk=100%") != std::string::npos) // Ditto
+			return true;
+
+		if(!boost::algorithm::starts_with(uri, rest_uri + "/producten/"))
+			return true;
+
+		return false;
+	}
+
+	void scraper::process(const page_t &current_page, const downloader::response &response)
+	{
+		/* Two modes:
+		 * - register_tags, fetches all products via the "Filters", goes through them in-order.
+		 * - !register_tags, fetches all products via inline ProductLanes and SeeMore widgets
+		 * The first takes an order more time than the second.
+		 * The first actually maps all categories and tags, which do not change often.
+		 * I suggest you run a scrape with this tag at most once a week.
+		 * Use sparingly.
+		 */
+		Json::Value cat_root(parse(current_page.uri, response.body));
+		for(auto const& lane : cat_root["_embedded"]["lanes"])
+		{
+			if(register_tags && lane["id"].asString() == "Filters" && current_page.expand)
+			{
+				// Only process filters exhaustively if register_tags is enabled
+				parse_filterlane(lane, current_page);
+			}
+			else if(lane["type"].asString() == "ProductLane")
+			{
+				parse_productlane(lane, current_page);
+			}
+			else if(!register_tags && lane["type"].asString() == "SeeMoreLane")
+			{
+				parse_seemorelane(lane, current_page);
+			}
+		}
 	}
 
 	void scraper::add_tag_to_hierarchy_f(std::vector<message::tag> const& _parent_tags, message::tag const& current_tag)
@@ -93,7 +143,15 @@ namespace supermarx
 					tags.insert(tags.end(), current_page.tags.begin(), current_page.tags.end());
 					tags.push_back(tag);
 
-					todo.push_front({rest_uri + "/" + uri, title, true, tags});
+					std::string new_uri = rest_uri + uri;
+					page_t new_page = {new_uri, title, true, tags};
+
+					if(is_blacklisted(new_uri))
+						continue;
+
+					m.schedule(std::move(new_uri), [&, new_page](downloader::response const& response) {
+						process(new_page, response);
+					});
 				}
 
 				break; // Only process first in bar, until none are left. (will fetch everything eventually)
@@ -122,8 +180,15 @@ namespace supermarx
 				if(lane_item["navItem"]["link"]["pageType"] == "legacy") // Old-style page in SeeMore Editorial
 					continue;
 
-				std::string uri = lane_item["navItem"]["link"]["href"].asString();
-				todo.push_front({rest_uri + "/" + uri, lane_name, true, tags});
+				std::string new_uri = rest_uri + lane_item["navItem"]["link"]["href"].asString();
+				page_t new_page = {new_uri, lane_name, true, tags};
+
+				if(is_blacklisted(new_uri))
+					continue;
+
+				m.schedule(std::move(new_uri), [&, new_page](downloader::response const& response) {
+					process(new_page, response);
+				});
 			}
 		}
 	}
@@ -140,80 +205,44 @@ namespace supermarx
 			tags.insert(tags.end(), current_page.tags.begin(), current_page.tags.end());
 			tags.push_back({title, std::string("Soort")});
 
-			todo.push_front({rest_uri + "/" + uri, title, true, tags});
+			std::string new_uri = rest_uri + uri;
+			page_t new_page = {new_uri, title, true, tags};
+
+			if(is_blacklisted(new_uri))
+				continue;
+
+			m.schedule(std::move(new_uri), [&, new_page](downloader::response const& response) {
+				process(new_page, response);
+			});
 		}
 	}
 
 	void scraper::scrape()
 	{
+		Json::Value producten_root(download(rest_uri + "/producten"));
+
+		for(auto const& lane : producten_root["_embedded"]["lanes"])
 		{
-			Json::Value producten_root(download(rest_uri + "/producten"));
+			if(lane["id"].asString() != "productCategoryNavigation")
+				continue;
 
-			for(auto const& lane : producten_root["_embedded"]["lanes"])
+			for(auto const& cat : lane["_embedded"]["items"])
 			{
-				if(lane["id"].asString() != "productCategoryNavigation")
-					continue;
+				std::string title = cat["title"].asString();
+				std::string uri = cat["navItem"]["link"]["href"].asString();
 
-				for(auto const& cat : lane["_embedded"]["items"])
-				{
-					std::string title = cat["title"].asString();
-					std::string uri = cat["navItem"]["link"]["href"].asString();
+				remove_hyphens(title);
 
-					remove_hyphens(title);
+				std::string new_uri = rest_uri + uri;
+				page_t new_page = {new_uri, title, true, {message::tag{title, std::string("Soort")}}};
 
-					todo.push_back({rest_uri + uri, title, true, {message::tag{title, std::string("Soort")}}});
-				}
+				m.schedule(std::move(new_uri), [&, new_page](downloader::response const& response) {
+					process(new_page, response);
+				});
 			}
 		}
 
-		while(!todo.empty())
-		{
-			page_t current_page(todo.front());
-			todo.pop_front();
-
-			if(!blacklist.insert(current_page.uri).second) // Already visited uri
-				continue;
-
-			if(current_page.uri.find("%2F") != std::string::npos) // Bug in AH server, will get 404
-				continue;
-
-			if(current_page.uri.find("merk=100%") != std::string::npos) // Ditto
-				continue;
-
-			/* Two modes:
-			 * - register_tags, fetches all products via the "Filters", goes through them in-order.
-			 * - !register_tags, fetches all products via inline ProductLanes and SeeMore widgets
-			 * The first takes an order more time than the second.
-			 * The first actually maps all categories and tags, which do not change often.
-			 * I suggest you run a scrape with this tag at most once a week.
-			 * Use sparingly.
-			 */
-			try
-			{
-				Json::Value cat_root(download(current_page.uri));
-				for(auto const& lane : cat_root["_embedded"]["lanes"])
-				{
-					if(register_tags && lane["id"].asString() == "Filters" && current_page.expand)
-					{
-						// Only process filters exhaustively if register_tags is enabled
-						parse_filterlane(lane, current_page);
-					}
-					else if(lane["type"].asString() == "ProductLane")
-					{
-						parse_productlane(lane, current_page);
-					}
-					else if(!register_tags && lane["type"].asString() == "SeeMoreLane")
-					{
-						parse_seemorelane(lane, current_page);
-					}
-				}
-			} catch(std::runtime_error const& e)
-			{
-				std::cerr << "Error occurred whilst downloading or parsing " << current_page.uri << std::endl;
-				std::cerr << " " << e.what() << std::endl;
-				continue; // Skip for now
-			}
-		}
+		m.process_all();
 	}
 
 	raw scraper::download_image(const std::string& uri)

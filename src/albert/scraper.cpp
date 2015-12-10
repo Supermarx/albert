@@ -17,11 +17,14 @@ namespace supermarx
 	: product_callback(_product_callback)
 	, tag_hierarchy_callback(_tag_hierarchy_callback)
 	, dl("supermarx albert/1.2", _ratelimit, _cache ? boost::optional<std::string>("./cache") : boost::none)
-	, m(dl)
+	, m(dl, [&]() { error_count++; })
 	, register_tags(_register_tags)
 	, todo()
 	, blacklist()
 	, tag_hierarchy()
+	, product_count(0)
+	, page_count(0)
+	, error_count(0)
 	{}
 
 	Json::Value scraper::parse(std::string const& uri, std::string const& body)
@@ -29,7 +32,7 @@ namespace supermarx
 		Json::Value root;
 		Json::Reader reader;
 
-		if(!reader.parse(body, root, false))
+		if(!body.empty() && !reader.parse(body, root, false))
 		{
 			dl.clear(uri);
 			throw std::runtime_error("Could not parse json feed");
@@ -56,14 +59,23 @@ namespace supermarx
 		if(uri.find("merk=100%") != std::string::npos) // Ditto
 			return true;
 
-		if(!boost::algorithm::starts_with(uri, rest_uri + "/producten/"))
-			return true;
-
 		return false;
+	}
+
+	void scraper::order(page_t const& p)
+	{
+		if(is_blacklisted(p.uri))
+			return;
+
+		m.schedule(p.uri, [&, p](downloader::response const& response) {
+			process(p, response);
+		});
 	}
 
 	void scraper::process(const page_t &current_page, const downloader::response &response)
 	{
+		page_count++;
+
 		/* Two modes:
 		 * - register_tags, fetches all products via the "Filters", goes through them in-order.
 		 * - !register_tags, fetches all products via inline ProductLanes and SeeMore widgets
@@ -143,15 +155,7 @@ namespace supermarx
 					tags.insert(tags.end(), current_page.tags.begin(), current_page.tags.end());
 					tags.push_back(tag);
 
-					std::string new_uri = rest_uri + uri;
-					page_t new_page = {new_uri, title, true, tags};
-
-					if(is_blacklisted(new_uri))
-						continue;
-
-					m.schedule(std::move(new_uri), [&, new_page](downloader::response const& response) {
-						process(new_page, response);
-					});
+					order({rest_uri + uri, title, true, tags});
 				}
 
 				break; // Only process first in bar, until none are left. (will fetch everything eventually)
@@ -174,21 +178,14 @@ namespace supermarx
 			{
 				auto const& product = lane_item["_embedded"]["productCard"]["_embedded"]["product"];
 				interpreter::interpret(product, current_page, product_callback);
+				product_count++;
 			}
 			else if(!register_tags && lane_type == "SeeMore")
 			{
 				if(lane_item["navItem"]["link"]["pageType"] == "legacy") // Old-style page in SeeMore Editorial
 					continue;
 
-				std::string new_uri = rest_uri + lane_item["navItem"]["link"]["href"].asString();
-				page_t new_page = {new_uri, lane_name, true, tags};
-
-				if(is_blacklisted(new_uri))
-					continue;
-
-				m.schedule(std::move(new_uri), [&, new_page](downloader::response const& response) {
-					process(new_page, response);
-				});
+				order({rest_uri + lane_item["navItem"]["link"]["href"].asString(), lane_name, true, tags});
 			}
 		}
 	}
@@ -205,20 +202,16 @@ namespace supermarx
 			tags.insert(tags.end(), current_page.tags.begin(), current_page.tags.end());
 			tags.push_back({title, std::string("Soort")});
 
-			std::string new_uri = rest_uri + uri;
-			page_t new_page = {new_uri, title, true, tags};
-
-			if(is_blacklisted(new_uri))
-				continue;
-
-			m.schedule(std::move(new_uri), [&, new_page](downloader::response const& response) {
-				process(new_page, response);
-			});
+			order({rest_uri + uri, title, true, tags});
 		}
 	}
 
 	void scraper::scrape()
 	{
+		product_count = 0;
+		page_count = 0;
+		error_count = 0;
+
 		Json::Value producten_root(download(rest_uri + "/producten"));
 
 		for(auto const& lane : producten_root["_embedded"]["lanes"])
@@ -233,16 +226,12 @@ namespace supermarx
 
 				remove_hyphens(title);
 
-				std::string new_uri = rest_uri + uri;
-				page_t new_page = {new_uri, title, true, {message::tag{title, std::string("Soort")}}};
-
-				m.schedule(std::move(new_uri), [&, new_page](downloader::response const& response) {
-					process(new_page, response);
-				});
+				order({rest_uri + uri, title, true, {message::tag{title, std::string("Soort")}}});
 			}
 		}
 
 		m.process_all();
+		std::cerr << "Pages: " << page_count << ", products: " << product_count << ", errors: " << error_count << std::endl;
 	}
 
 	raw scraper::download_image(const std::string& uri)

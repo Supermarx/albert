@@ -32,9 +32,11 @@ namespace supermarx
 		std::set<std::string> blacklist;
 
 		std::map<message::tag, std::set<message::tag>> tag_hierarchy; // tag_hierarchy[parent] = children_set;
+		size_t product_count, page_count, error_count;
 
 		bool is_blacklisted(std::string const& uri);
 
+		void order(page_t const& p);
 		Json::Value parse(std::string const& uri, std::string const& body);
 		Json::Value download(std::string const& uri);
 

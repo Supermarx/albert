@@ -176,7 +176,7 @@ namespace supermarx
 			std::string lane_type = lane_item["type"].asString();
 			if(lane_type == "Product")
 			{
-				auto const& product = lane_item["_embedded"]["productCard"]["_embedded"]["product"];
+				auto const& product = lane_item["_embedded"]["product"];
 				interpreter::interpret(product, current_page, product_callback);
 				product_count++;
 			}

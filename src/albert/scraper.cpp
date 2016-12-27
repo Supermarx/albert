@@ -16,7 +16,7 @@ namespace supermarx
 	scraper::scraper(product_callback_t _product_callback, tag_hierarchy_callback_t _tag_hierarchy_callback, unsigned int _ratelimit, bool _cache, bool _register_tags)
 	: product_callback(_product_callback)
 	, tag_hierarchy_callback(_tag_hierarchy_callback)
-	, dl("supermarx albert/1.2", _ratelimit, _cache ? boost::optional<std::string>("./cache") : boost::none)
+	, dl("supermarx albert/1.3", _ratelimit, _cache ? boost::optional<std::string>("./cache") : boost::none)
 	, m(dl, [&]() { error_count++; })
 	, register_tags(_register_tags)
 	, todo()
@@ -44,7 +44,7 @@ namespace supermarx
 	Json::Value scraper::download(std::string const& uri)
 	{
 		return stubborn::attempt<Json::Value>([&](){
-			return parse(uri, dl.fetch(uri).body);
+			return parse(uri, dl.fetch(rest_uri+"/delegate?url="+dl.escape(uri)).body);
 		});
 	}
 
@@ -67,7 +67,7 @@ namespace supermarx
 		if(is_blacklisted(p.uri))
 			return;
 
-		m.schedule(p.uri, [&, p](downloader::response const& response) {
+		m.schedule(rest_uri+"/delegate?url="+dl.escape(p.uri), [&, p](downloader::response const& response) {
 			process(p, response);
 		});
 	}
@@ -185,7 +185,7 @@ namespace supermarx
 				if(lane_item["navItem"]["link"]["pageType"] == "legacy") // Old-style page in SeeMore Editorial
 					continue;
 
-				order({rest_uri + lane_item["navItem"]["link"]["href"].asString(), lane_name, true, tags});
+				order({lane_item["navItem"]["link"]["href"].asString(), lane_name, true, tags});
 			}
 		}
 	}
@@ -202,7 +202,7 @@ namespace supermarx
 			tags.insert(tags.end(), current_page.tags.begin(), current_page.tags.end());
 			tags.push_back({title, std::string("Soort")});
 
-			order({rest_uri + uri, title, true, tags});
+			order({uri, title, true, tags});
 		}
 	}
 
@@ -212,7 +212,7 @@ namespace supermarx
 		page_count = 0;
 		error_count = 0;
 
-		Json::Value producten_root(download(rest_uri + "/producten"));
+		Json::Value producten_root(download("/producten"));
 
 		for(auto const& lane : producten_root["_embedded"]["lanes"])
 		{
@@ -226,7 +226,7 @@ namespace supermarx
 
 				remove_hyphens(title);
 
-				order({rest_uri + uri, title, true, {message::tag{title, std::string("Soort")}}});
+				order({uri, title, true, {message::tag{title, std::string("Soort")}}});
 			}
 		}
 
